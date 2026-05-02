@@ -1,0 +1,303 @@
+I have an existing ChurchOS React + Express app at church-hub-suite.replit.app.
+DO NOT rebuild anything. Only modify copy, rename labels, add new UI elements,
+and add new routes where specified. Preserve all existing functionality.
+
+PROMPT A — Reframe all language from accountability to growth
+Update all UI copy throughout the ChurchOS React frontend. 
+Do NOT change any backend logic, routes, or data — only text labels, 
+headings, button text, descriptions, and page titles.
+
+Make these exact replacements everywhere they appear:
+
+"Ghost Member Detector" → "Member Retention Tracker"
+"Ghost members" / "Ghost" status label → "Lapsed Members"
+"At Risk" status label → "Needs Attention"  
+"Drift Risk" → "Engagement Alert"
+"High Risk" → "Priority Follow-up"
+"Pastoral Care Flag" → "Retention Opportunity"
+"Pastoral care" (when used as a label) → "Personal Outreach"
+"Giving Intelligence" → "Giving Insights"
+"Stewardship Report" → "Church Giving Summary"
+"Stewardship Certificate" / "Stewardship Certified" → "Trusted Church"
+"Transparency" (when used in giving context) → "Member Visibility"
+"Demo Mode banner" text → change from "all notifications appear in the 
+  Inbox instead of being sent" to "preview mode — go live to reach your 
+  members directly"
+"Ghost Member Alert" notification subject lines → "Retention Alert"
+
+On the Members dashboard Early Warning tab:
+- Remove the numeric score (e.g. "65/100") from all member cards
+- Replace with a plain-English action label based on the score:
+  * 0-20: no label shown
+  * 21-40: "Monitor" (grey badge)
+  * 41-60: "Reach out this week" (amber badge)  
+  * 61-100: "Call today" (red badge)
+- Remove "Score: 65/100" from all Inbox notification bodies — 
+  replace with "Last seen: [lastAttendance]"
+
+On the Giving Insights page:
+- Change "Silent Givers" section heading → "Members to check in with"
+- Change "Pastoral Flags" stat card → "Outreach Alerts"
+- Change the notification body that says "⚠️ This is NOT a finance alert" →
+  remove this line entirely (it draws attention to what we're NOT doing)
+  Replace with: "A personal call from the pastoral team this week 
+  would mean a lot to them."
+
+On the landing page (index / home):
+- Change hero headline → "Grow Your Church. Keep Every Member."
+- Change sub-headline → "ChurchOS helps Nigerian churches welcome visitors, 
+  retain members, and run Sundays without the stress."
+- Change all product card descriptions to be outcome-focused:
+  * Visitor Follow-Up: "Turn first-time visitors into lifelong members"
+  * Sunday Prep: "Professional Sundays in 20 minutes"
+  * Church Giving: "Simple, trustworthy giving for your congregation"
+  * Member Tracker: "Know who needs a call before they slip away"
+  * Sermon Archive: "Every sermon. Findable. Shareable. Forever."
+
+PROMPT B — Add human approval queue for all AI outreach
+Add a Message Approval Queue to ChurchOS. 
+
+Currently, the Visitor Nurture Agent and Drift Risk Predictor create 
+notifications that imply messages will be sent automatically. 
+Add a human review step so NO outreach message fires without a person 
+approving it first.
+
+STEP 1 — Add 'approval_status' to notifications table
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS approvalStatus 
+TEXT DEFAULT 'auto';
+
+For notifications that are type 'drift-risk', 'visitor-nurture', 
+or 'pastoral-care-giving': set approvalStatus = 'pending' when created.
+For all other types: approvalStatus = 'auto' (no approval needed).
+
+Update the notification creation logic in:
+- POST /api/agents/sunday-run 
+- GET /api/members/drift-risk
+- GET /api/giving/insights
+- POST /api/visitors/sequences (step creation)
+...to set approvalStatus = 'pending' for the outreach message types listed above.
+
+STEP 2 — Update GET /api/notifications
+Add approvalStatus to the returned fields.
+Add a query param filter: ?pendingOnly=true 
+  returns only notifications where approvalStatus = 'pending'
+
+STEP 3 — Add POST /api/notifications/:id/approve
+Sets approvalStatus = 'approved', sets sentAt = now.
+Returns: { success: true, notification }
+
+STEP 4 — Add POST /api/notifications/:id/edit-and-approve
+Body: { body: string } — allows editing the message before approving.
+Updates the body field AND sets approvalStatus = 'approved', sentAt = now.
+Returns: { success: true, notification }
+
+STEP 5 — Add POST /api/notifications/:id/dismiss
+Sets approvalStatus = 'dismissed'.
+Returns: { success: true }
+
+STEP 6 — Update the Inbox page (/app/inbox)
+Split the inbox into two tabs:
+Tab 1: "Needs Review" — shows all notifications where approvalStatus = 'pending'
+Tab 2: "All Activity" — shows everything
+
+For each "Needs Review" card:
+- Show the message in an editable textarea (pre-filled with the AI suggestion)
+- Three buttons: 
+  * "✓ Approve & Send" (green) → calls /approve
+  * "✏️ Edit & Send" (amber) → makes textarea editable, then calls /edit-and-approve  
+  * "✕ Dismiss" (grey) → calls /dismiss
+- Label at top of card: "AI Suggested · Awaiting your approval"
+
+Update the nav badge: show the count of pending-approval notifications 
+(not total unread) — this is the number that actually needs human action.
+
+Add a small note below the tab: "Messages only reach members after 
+you approve them. ChurchOS never sends automatically."
+This is a trust signal, not a disclaimer — style it positively in green.
+
+PROMPT C — Add consent to visitor and member forms
+Add a consent checkbox to the Visitor Registration form and the 
+Add Member form in ChurchOS.
+
+ON THE VISITOR FORM (/app/visitor or wherever the public visitor 
+capture form renders):
+
+Add a checkbox field ABOVE the submit button:
+  □ "I'd like to receive updates and messages from [Church Name] 
+     about services, events and community news."
+
+- Default: unchecked
+- Not required — visitor can submit without checking it
+- Store the value in a new column: consentGiven INTEGER DEFAULT 0 
+  on the visitors table (add via ALTER TABLE in the backend)
+- Save true/false based on whether box was checked
+
+When the 14-day nurture sequence is created for a new visitor:
+- If consentGiven = 0: create the sequences but set ALL steps to 
+  approvalStatus = 'pending' AND add a warning line to each notification body:
+  "⚠️ This visitor did not opt in to communications. 
+  Review carefully before approving."
+- If consentGiven = 1: create sequences normally (still pending approval, 
+  but no warning)
+
+ON THE ADD MEMBER FORM (/app/members/register):
+
+Add the same checkbox:
+  □ "This member has given permission to receive church communications 
+     and follow-up messages."
+
+Store as consentGiven column on members table (add via ALTER TABLE).
+
+On the Member Retention dashboard:
+- Add a small icon next to each member name: 
+  ✓ (green) if consentGiven = 1, blank if 0
+- Tooltip on hover: "Communications consent given" or "No consent on record"
+
+PROMPT D — Lock features behind the Visitor tool (entry wedge)
+Update the ChurchOS navigation and dashboard to create a guided 
+onboarding flow that leads with the Visitor Follow-Up tool.
+
+ON THE MAIN LANDING PAGE / HOME:
+
+Make the Visitor Follow-Up the only prominent CTA above the fold.
+Change the layout so:
+- Hero section: focuses entirely on "Turn first-time visitors into 
+  lifelong members" with ONE button: "Set Up Your Visitor Page →"
+- The other 4 products appear below in a "What's included" section 
+  with smaller cards, not primary CTAs
+- Add a line: "Start free with visitor follow-up. 
+  Unlock the full suite as you grow."
+
+IN THE APP NAVIGATION:
+
+Reorder nav items so Visitor Follow-Up is always first.
+Add a subtle "Start here →" label next to it on first load 
+(use localStorage to show it only once).
+
+ON THE PRODUCT PAGES FOR MEMBERS, GIVING, SERMONS, SUNDAY PREP:
+
+Add a soft "Getting started?" banner at the top of each page 
+(only shown if the visitors table has 0 records):
+"💡 Most churches start with the Visitor Follow-Up tool — 
+it's the fastest way to see ChurchOS working for your church. 
+[Set it up first →]"
+
+This is guidance, not a hard lock. Don't disable or hide features.
+The goal is to direct first-time users toward the highest-value 
+starting point without blocking access to anything.
+
+PROMPT E — Build the Growth Dashboard
+Add a Growth Dashboard as the main landing page inside the ChurchOS app.
+This is the first thing a pastor sees after login — a single-screen 
+summary of what matters most: growth, retention, and engagement.
+
+Create a new route: GET /api/dashboard/growth?churchName=X
+This route queries all 5 SQLite tables and returns:
+
+{
+  visitors: {
+    total: N,
+    thisMonth: N,
+    retained: N,        // visitors whose status = 'returned'
+    conversionRate: "X%"  // retained / total * 100
+  },
+  members: {
+    total: N,
+    active: N,
+    needsAttention: N,  // consecutiveMisses >= 2
+    lapsed: N           // consecutiveMisses >= 4
+    retentionRate: "X%" // active / total * 100
+  },
+  giving: {
+    totalThisMonth: N,
+    totalGivers: N,
+    topCategory: "Tithe"
+  },
+  sermons: {
+    total: N,
+    totalPlays: N,
+    mostPlayed: { title, preacher, playCount }
+  },
+  inbox: {
+    pendingApprovals: N  // notifications where approvalStatus = 'pending'
+  }
+}
+
+CREATE A NEW PAGE: /app/dashboard (or make it the default / route in the app)
+
+LAYOUT — 3 sections:
+
+SECTION 1: "Good morning, Pastor." header
+- Greeting uses time of day (Good morning / afternoon / evening)
+- Sub-text: "Here's how [Church Name] is growing."
+- If pendingApprovals > 0: show amber banner:
+  "You have [N] messages waiting for your approval before they reach members. 
+  [Review now →]"
+
+SECTION 2: 4 Growth Stat Cards (large, prominent)
+1. "Visitors This Month" — number + "X retained" in smaller text below
+2. "Active Members" — number + retention rate % badge
+3. "Members Needing a Call" — number in amber/red if > 0, green if 0
+4. "Giving This Month" — ₦ amount formatted with commas
+
+SECTION 3: "This Week's Priorities" — action list
+Auto-generated from live data, max 4 items, ordered by urgency:
+
+* If pendingApprovals > 0: 
+  "📬 [N] outreach messages need your review → [Go to Inbox]"
+* If any member has consecutiveMisses >= 4:
+  "📞 [Name] and [N] others haven't been seen in 4+ weeks → [View Members]"  
+* If a sermon has no audioFilename and sermonDate < 7 days ago:
+  "🎙️ Last Sunday's sermon isn't uploaded yet → [Upload now]"
+* If visitors.thisMonth > 0 and visitors.retained = 0:
+  "👋 You had [N] visitors this month — none have returned yet → [View Visitors]"
+* If all is well: "✅ Everything looks healthy. Keep it up!"
+
+Add "📊 Dashboard" as the FIRST item in the navigation.
+Make it the default page when the app loads (redirect / to /app/dashboard).
+
+PROMPT F — Rename the suite and sharpen the homepage
+Make two final changes to complete the repositioning.
+
+CHANGE 1 — Update the public landing page pitch entirely.
+
+Replace the current landing page content with this structure:
+
+HERO:
+Headline: "Grow Your Church. Keep Every Member."
+Sub: "The all-in-one tool for Nigerian churches — 
+visitor follow-up, member retention, giving, sermons, and Sunday prep. 
+Everything in one place. Built for how Nigerian churches actually work."
+CTA: "Try ChurchOS Free →" (links to /app/dashboard)
+Secondary: "See a live demo →" (links to /visitor/form?church=Demo+Church+Lagos)
+
+SOCIAL PROOF LINE (below CTA):
+"Join churches across Nigeria using ChurchOS to grow their congregation"
+
+THE PROBLEM SECTION (3 cards):
+1. "Visitors leave and never come back"
+   "Most churches have no system for following up. 
+   The first Sunday is the only Sunday they ever see."
+2. "Members drift away unnoticed"  
+   "By the time you realise someone is gone, they already left. 
+   No one saw it coming."
+3. "Sundays take all week to prepare"
+   "Bulletins, slides, announcements — every week someone 
+   spends hours on things that should take minutes."
+
+THE SOLUTION (5 product cards — keep these):
+Same as before but outcome-focused copy as updated in Prompt A.
+
+TRUST SIGNAL SECTION:
+"ChurchOS is built on a simple belief: a well-organised church is 
+a church that can focus on what matters — people."
+"Your data stays yours. No ads. No data selling. 
+Messages only reach your members when you approve them."
+
+CHANGE 2 — Update the browser tab title and favicon description.
+
+Change <title> from "ChurchOS" to "ChurchOS — Grow Your Church"
+Update any meta description tags to:
+"ChurchOS helps Nigerian churches follow up with visitors, 
+retain members, and run Sundays without the stress. 
+Built for Nigerian churches."
