@@ -1,0 +1,384 @@
+PROMPT 4 — Drift Risk Predictor
+Add a Drift Risk Predictor to the Ghost Member Detector in ChurchOS.
+
+The app already has members at GET /api/members with fields:
+id, churchName, fullName, phone, email, cellGroup, cellLeaderEmail,
+joinDate, lastAttendance, consecutiveMisses, status, createdAt
+
+STEP 1 — GET /api/members/drift-risk?churchName=X
+Analyses all members for that church and returns drift risk scores.
+
+For each member, calculate a DRIFT SCORE (0-100) based on:
+
+Factor 1: Attendance trajectory (40 points max)
+- consecutiveMisses == 0 AND lastAttendance within 7 days: 0 points (no risk)
+- consecutiveMisses == 0 AND lastAttendance 8-14 days ago: 10 points
+- consecutiveMisses == 1: 25 points
+- consecutiveMisses == 2: status already 'atRisk', still add 40 points
+- consecutiveMisses >= 4: already ghost
+
+Factor 2: Days since joining vs engagement (30 points max)
+- Joined more than 90 days ago AND consecutiveMisses >= 1: add 15 points
+- Joined more than 180 days ago AND consecutiveMisses >= 1: add 30 points
+- (Long-standing members who start missing are higher risk than new members)
+
+Factor 3: Giving correlation (30 points max)
+- Cross-reference with giving table: find records where donorPhone matches member phone
+- If member has never given: add 10 points (lower engagement signal)
+- If member gave previously but no giving in last 30 days: add 20 points
+- If member gave previously but no giving in last 60 days: add 30 points
+
+DRIFT LEVEL classification:
+- Score 0-20: "Healthy" (no action needed)
+- Score 21-40: "Watch" (monitor, no alert yet)
+- Score 41-60: "Drift Risk" 🟡 (trigger a proactive check-in)
+- Score 61-100: "High Risk" 🔴 (immediate pastoral outreach)
+
+For all members with driftLevel "Drift Risk" or "High Risk":
+- Generate a personalised AI check-in message using OpenAI (gpt-4o-mini):
+  
+  Prompt: "Write a warm, casual WhatsApp message (max 2 sentences) 
+  from a cell leader checking in on a church member named [firstName] 
+  who has been attending [churchName] for [X months]. The message should 
+  feel personal and caring, not robotic. No mention of attendance or giving. 
+  Sign it as 'Your [cellGroup] family'. Nigerian-English tone is fine."
+  
+  Store this as suggestedMessage in the response.
+  If no OpenAI key: suggestedMessage = "Hi [firstName]! Just thinking about 
+  you today and wanted to check in. How are you doing? 🙏 — [cellGroup] family"
+
+Return JSON:
+{
+  totalMembers: N,
+  healthy: [...members],
+  watch: [...members],
+  driftRisk: [...members with driftScore and suggestedMessage],
+  highRisk: [...members with driftScore and suggestedMessage]
+}
+
+STEP 2 — Notifications
+For each "High Risk" member where no drift-risk notification exists yet:
+Insert into notifications table:
+  type: "drift-risk"
+  recipient: member.cellLeaderEmail
+  subject: "Early warning: [fullName] — [cellGroup]"
+  body: "Our system has detected early drift signals for [fullName] in [cellGroup].
+  They are not yet officially absent but engagement indicators suggest they 
+  may be drifting. Suggested message to send them this week:
+  
+  '[suggestedMessage]'
+  
+  Sending this message now takes 30 seconds and could retain a member. 
+  Last attendance: [lastAttendance] | Score: [driftScore]/100"
+
+STEP 3 — Frontend: Drift Risk Panel on Members Dashboard
+On the existing Members/Dashboard page, add a new tab: "Early Warning"
+
+Show:
+- Headline: "AI Drift Risk Analysis — [churchName]"
+- 4 stat cards: Healthy (green), Watching (blue), Drift Risk (amber), High Risk (red)
+- A horizontal "congregation health bar" — proportional coloured segments
+- Section: "Members Needing Attention" — shows Drift Risk + High Risk members
+- Each member card shows:
+  * Name, Cell Group, Last Attendance, Drift Score (as a progress bar 0-100)
+  * Drift Level badge (coloured)
+  * "Suggested Message" in a grey box with a "Copy Message" button
+  * "Mark as Followed Up" button (POST to update member notes)
+- Empty state: "🎉 All members are healthy — no drift risk detected."
+- A small "How is this calculated?" info tooltip explaining the scoring factors
+
+
+AI FEATURE 5 — Sunday Morning Coordinator Agent
+Autonomous agent that runs every Sunday without anyone having to remember
+What it adds: A cron job that fires at 6:00am every Sunday and coordinates
+the whole church operation automatically — reminders, checks, prompts, and
+post-service tasks. No human triggers it. It just runs.
+New API route: POST /api/agents/sunday-run (also runs automatically via cron)
+
+PROMPT 5 — Sunday Morning Coordinator Agent
+Add a Sunday Morning Coordinator Agent to ChurchOS.
+
+Install node-cron: add "node-cron" to package.json dependencies.
+Import it in your main server file: import cron from 'node-cron'
+
+STEP 1 — Create POST /api/agents/sunday-run
+This is the agent function. It does ALL of the following in sequence and 
+returns a summary of what it did. Can be triggered manually OR by the cron job.
+
+--- ACTION 1: Member Birthday Check ---
+Calculate which members (from GET members data) have a birthday this week:
+  Compare joinDate month/day to current week (within next 7 days)
+  Note: joinDate is the only date field — use it as a proxy OR add a new 
+  "birthday" TEXT column to the members table for this feature.
+  
+  Actually: add birthday TEXT column to members table via ALTER TABLE IF NOT EXISTS.
+  For demo data, set birthday = joinDate for existing records.
+  
+  For each member with a birthday this week:
+  Insert into notifications:
+    type: "birthday-reminder"
+    recipient: "pastor@demo.com"
+    subject: "🎂 Birthday this week: [fullName]"
+    body: "This is a reminder that [fullName] ([cellGroup]) has a birthday 
+    on [date]. A personal WhatsApp message from the pastor will mean the world 
+    to them. Suggested message: 'Happy birthday [firstName]! 🎉 Wishing you 
+    God's best this new year of your life. — Pastor'"
+
+--- ACTION 2: Unseen Sermon Check ---
+Check if there is a sermon with a sermonDate within the last 7 days and 
+audioFilename IS NULL:
+  If yes: insert notification:
+    type: "media-reminder"
+    recipient: "media@demo.com"  
+    subject: "⚠️ Last Sunday's sermon not uploaded yet"
+    body: "'[sermonTitle]' by [preacher] from [sermonDate] has no audio file 
+    uploaded. Please upload the recording to the Sermon Archive today so 
+    members can replay it this week."
+
+--- ACTION 3: Member Service Reminder ---
+Get all members with status = 'active':
+  Insert ONE bulk notification (not one per member — keep it simple for demo):
+    type: "service-reminder"
+    recipient: "all-active-members"
+    subject: "☀️ Sunday Service Reminder — [churchName]"
+    body: "Good morning, family! 🙏 Service starts at 9:00am today at 
+    [churchName]. Come expecting a Word from God. See you in the house! — 
+    ChurchOS Sunday Reminder"
+
+--- ACTION 4: Ghost Member Weekly Report ---
+Count members by status from the members table.
+Insert notification:
+  type: "weekly-report"
+  recipient: "pastor@demo.com"
+  subject: "📊 This Sunday's Congregation Health Report"
+  body: "Good morning, Pastor. Here's this Sunday's snapshot for [churchName]:
+  
+  ✅ Active members: [count]
+  ⚠️ At Risk (2+ misses): [count]
+  🔴 Ghost members (4+ misses): [count]
+  👋 New visitors this week: [count of visitors from last 7 days]
+  
+  [If ghost count > 0]: You have [count] ghost members. 
+  Their cell leaders have been notified.
+  [If new visitors > 0]: [count] new visitors registered this week. 
+  Their 14-day nurture sequences are running.
+  
+  Have a powerful service today. — ChurchOS Sunday Agent"
+
+--- ACTION 5: Post-Service Prompt (fires at 1:00pm Sunday) ---
+Create a SECOND cron job that fires at 1pm every Sunday:
+Insert notification:
+  type: "post-service"
+  recipient: "media@demo.com"
+  subject: "🎙️ Upload today's sermon"
+  body: "Service is done! Please upload today's sermon recording to the 
+  Sermon Archive before you leave. Members are already asking for the replay. 
+  Upload here: [appUrl]/sermons — takes 2 minutes."
+
+STEP 2 — Schedule with cron
+Add these two cron jobs after your Express routes are set up:
+
+// 6:00 AM every Sunday
+cron.schedule('0 6 * * 0', () => {
+  fetch('http://localhost:5000/api/agents/sunday-run', { method: 'POST' })
+    .catch(err => console.log('Sunday agent error:', err))
+})
+
+// 1:00 PM every Sunday (post-service prompt)
+cron.schedule('0 13 * * 0', () => {
+  // Insert the post-service notification directly using the db object
+  // (to avoid circular fetch)
+})
+
+STEP 3 — Frontend: Agent Control Panel
+Add a new page/section: /admin/agent (link it in the nav as "🤖 Agent")
+
+Show:
+- Page title: "Sunday Morning Agent"
+- Status card: "Agent Status: Active 🟢" (or "Inactive 🔴" if cron is not running)
+- "Next scheduled run: Sunday [date] at 6:00am"
+- A "Run Agent Now" button (POST /api/agents/sunday-run) — for testing any day
+- After running: show a results card:
+  "Agent completed in [Xms]. Actions taken:
+   ✅ [N] birthday reminders sent
+   ✅ Service reminder sent to [N] active members
+   ⚠️ Sermon upload reminder sent (last week's recording missing)
+   📊 Weekly health report delivered to pastor inbox"
+- Below: last 10 agent runs from notifications table 
+  (filter type IN ('birthday-reminder','service-reminder','weekly-report','post-service'))
+  shown as a log with timestamps
+
+Add "🤖 Agent" to the main navigation alongside the other 5 products.
+
+
+AI FEATURE 6 — Multilingual Announcement Generator
+Yoruba · Igbo · Hausa — one click, three languages
+What it adds: Church announcements are written once in English and
+translated instantly to Yoruba, Igbo, and Hausa. Members receive messages
+in their preferred language. Works on the Sunday Prep bulletin and direct broadcasts.
+New API route: POST /api/ai/translate
+New DB column: preferredLanguage on members table
+
+PROMPT 6 — Multilingual Announcement Generator
+Add a Multilingual Announcement Generator to ChurchOS.
+
+STEP 1 — Add preferredLanguage to members table
+ALTER TABLE members ADD COLUMN IF NOT EXISTS preferredLanguage TEXT DEFAULT 'English';
+Wrap in try/catch if SQLite version doesn't support IF NOT EXISTS on ALTER TABLE.
+
+STEP 2 — POST /api/ai/translate
+Body: { text: string, targetLanguages: string[] }
+targetLanguages can include: "Yoruba", "Igbo", "Hausa"
+
+For each target language, call OpenAI (gpt-4o-mini):
+  System: "You are a professional translator specialising in Nigerian languages 
+  for Christian church communications. Translate the following announcement from 
+  English to [language]. Keep the tone warm, formal, and respectful — 
+  appropriate for a church WhatsApp broadcast. Preserve any names, scripture 
+  references, and specific times/dates exactly as written."
+  
+  User: [text to translate]
+
+Return:
+{
+  original: string,
+  translations: {
+    Yoruba: string | null,
+    Igbo: string | null,
+    Hausa: string | null
+  }
+}
+
+If no OPENAI_API_KEY: return demo translations:
+  Yoruba: "[Demo] " + text + " (Yoruba translation — configure OpenAI key to enable)"
+  Igbo: "[Demo] " + text + " (Igbo translation — configure OpenAI key to enable)"
+  Hausa: "[Demo] " + text + " (Hausa translation — configure OpenAI key to enable)"
+
+STEP 3 — New standalone page: /announcements
+Create a new Announcements page accessible from the main nav.
+
+UI:
+- Page title: "📢 Announcements"
+- Large textarea: "Write your announcement in English" 
+  (placeholder: "e.g. Sunday service this week will begin at 9am. 
+  We will also be having a special thanksgiving offering. All are welcome.")
+- Language selection: 3 toggle buttons — Yoruba | Igbo | Hausa (multi-select)
+- "Translate" button (calls POST /api/ai/translate)
+- Results section (appears after translation):
+  * 4 cards side by side (or stacked on mobile): 
+    English original | Yoruba | Igbo | Hausa
+  * Each card has a language flag emoji and "Copy" button
+  * If a language was not selected, its card shows "Not selected"
+- Below results: "Send to Members" section
+  * Dropdown: "Send English to all" / "Send in each member's preferred language"
+  * "Preview Broadcast" button → shows a modal with what each language group would receive
+  * "Send to Inbox (Demo)" button → inserts one notification per language into 
+    the notifications table
+
+STEP 4 — Add translation toggle to Sunday Prep output
+On the existing Sunday Prep output page (after bulletin is generated):
+Add a small section at the bottom of the output: 
+"📢 Translate Announcements"
+- Shows the Announcements field from the program form
+- Same 3 language toggles as above
+- Calls the same POST /api/ai/translate endpoint
+- Shows results inline below the bulletin preview
+
+STEP 5 — Member language preference in Members Register
+On the Member Registration form (/members/register):
+Add a field: "Preferred Language" — dropdown: English / Yoruba / Igbo / Hausa
+Saves to the new preferredLanguage column.
+
+Add "🌍 Announcements" to the main navigation.
+
+
+AI FEATURE 7 — AI Sermon Prep (Nigerian Context Engine)
+Connects your scripture to what your congregation lived through this week
+What it adds: Enhances the Sunday Prep module. After the pastor enters a
+scripture and sermon title, the AI fetches relevant Nigerian context —
+current economic conditions, cultural references, shared national experiences —
+and suggests sermon illustrations that will land with a Nigerian congregation.
+Enhances existing: POST /api/programs (Sunday Prep)
+New API route: POST /api/ai/sermon-context
+
+PROMPT 7 — AI Sermon Context Engine
+Add an AI Sermon Context Engine to ChurchOS.
+
+This enhances the existing Sunday Prep module by adding AI-generated 
+Nigerian sermon illustrations and cultural context.
+
+STEP 1 — POST /api/ai/sermon-context
+Body: { scripture: string, sermonTitle: string, mainPoints: string, churchName: string }
+
+Call OpenAI (gpt-4o-mini) with this prompt:
+
+System: "You are a sermon preparation assistant for Nigerian pastors. 
+You help pastors connect biblical texts to the lived experience of 
+Nigerian congregations — economic hardship, family pressures, cultural 
+dynamics, national events, and the unique spiritual landscape of Nigeria.
+You are warm, theologically grounded, and write in a style that respects 
+Nigerian church culture. You never write the sermon — you equip the pastor."
+
+User: "I am preaching on [scripture] at [churchName]. 
+Sermon title: [sermonTitle]. 
+Main points I plan to cover: [mainPoints]
+
+Please give me:
+1. THREE specific Nigerian illustrations or analogies for this text 
+   (reference everyday Nigerian experiences — market life, fuel queues, 
+   family expectations, NEPA/PHCN light, hustle culture, jollof rice, etc.)
+
+2. ONE current economic/social reality in Nigeria (2025-2026) that connects 
+   to this passage's theme
+
+3. TWO questions to ask the congregation that will make them feel deeply seen 
+   and understood (not generic — specific to Nigerian life)
+
+4. ONE short prayer opener (2 sentences, Nigerian church style) that connects 
+   the scripture to their daily reality
+
+Format each section clearly with headers."
+
+Return: { context: string, generatedAt: timestamp }
+If no OpenAI key: return a helpful demo response with placeholder text explaining 
+what the feature would generate.
+
+STEP 2 — Frontend: Context Panel in Sunday Prep
+On the existing Sunday Prep form page (/sunday-prep):
+
+After the main form fields (scripture, sermon title, main points), add:
+"✨ Get Nigerian Context (AI)" — a collapsible section
+
+Inside it:
+- "Generate Illustrations" button (amber, same style as existing buttons)
+- While loading: "Finding Nigerian connections for your text..." (animated dots)
+- Results appear in a card with gold left border:
+  
+  Section 1: "🇳🇬 Nigerian Illustrations"
+  (3 bullet points, each a short illustration idea)
+  
+  Section 2: "📰 Current Context"
+  (1 paragraph connecting to present-day Nigeria)
+  
+  Section 3: "❓ Congregation Questions"
+  (2 questions that make the congregation feel seen)
+  
+  Section 4: "🙏 Prayer Opener"
+  (2-sentence prayer)
+
+- "Copy All Context" button — copies the full context to clipboard
+- "Insert into Main Points" button — appends the illustrations to the 
+  Main Points textarea in the form above
+
+The context panel should appear BEFORE the "Generate My Sunday Program" button,
+so the pastor can enrich their main points with the AI context first, 
+then generate the final bulletin.
+
+STEP 3 — Also save context with the program
+When the bulletin is generated (existing POST /api/programs route),
+if an aiContext field is included in the request body, save it to the 
+programs table (add aiContext TEXT column via ALTER TABLE).
+
+Show the AI context at the bottom of the generated bulletin output page
+as a "Pastor's Notes" section (styled differently from the bulletin — 
+clearly marked as private preparation notes, not for printing).

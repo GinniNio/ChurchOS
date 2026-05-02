@@ -139,6 +139,43 @@ CREATE INDEX IF NOT EXISTS idx_visitor_sequences_status ON visitor_sequences(sta
 // Additive migrations — wrapped in try/catch so they are safe on existing DBs
 try { db.exec("ALTER TABLE sermons ADD COLUMN transcript TEXT"); } catch { /* already exists */ }
 
+// Spread demo giving records across 90 days so consistent/silent detection works in demos
+{
+  const now2 = new Date();
+  const iso = (d: number) => new Date(now2.getTime() - d * 86400000).toISOString();
+
+  // Update the 5 original seed records to have spread-out dates
+  const updates: [string, string][] = [
+    ["DEMO-TITHE-001",  iso(80)],   // Adaeze — 80 days ago
+    ["DEMO-OFF-001",    iso(45)],   // Chinedu — 45 days ago
+    ["DEMO-BLD-001",    iso(75)],   // Ngozi   — 75 days ago
+    ["DEMO-OFF-002",    iso(20)],   // Funmi   — 20 days ago
+    ["DEMO-TITHE-002",  iso(60)],   // Emeka   — 60 days ago
+  ];
+  const upd = db.prepare("UPDATE giving SET createdAt = ? WHERE ref = ?");
+  for (const [ref, date] of updates) upd.run(date, ref);
+
+  // Add extra records to make 3 donors have 3+ gifts (required for consistent/silent detection)
+  const insGiving2 = db.prepare(
+    `INSERT OR IGNORE INTO giving (churchName, donorName, donorPhone, amount, category, status, ref, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const church2 = "Demo Church Lagos";
+  const extraGiving: [string, string, string, number, string, string, string, string][] = [
+    // Adaeze Okafor — 4 gifts total, last gift 5 days ago → isConsistent
+    [church2, "Adaeze Okafor", "+2348012340001", 6000, "Tithe",    "successful", "DEMO-TITHE-003", iso(50)],
+    [church2, "Adaeze Okafor", "+2348012340001", 5500, "Tithe",    "successful", "DEMO-TITHE-004", iso(22)],
+    [church2, "Adaeze Okafor", "+2348012340001", 5000, "Tithe",    "successful", "DEMO-TITHE-005", iso(5)],
+    // Ngozi Bello — 3 gifts total, last gift 35 days ago → isSilent (pastoral care flag)
+    [church2, "Ngozi Bello",   "+2348012340003", 8000, "Building Project", "successful", "DEMO-BLD-002", iso(55)],
+    [church2, "Ngozi Bello",   "+2348012340003", 12000,"Building Project", "successful", "DEMO-BLD-003", iso(35)],
+    // Emeka Nwosu — 3 gifts total, last gift 8 days ago → isConsistent
+    [church2, "Emeka Nwosu",   "+2348012340006", 8000, "Tithe",    "successful", "DEMO-TITHE-006", iso(30)],
+    [church2, "Emeka Nwosu",   "+2348012340006", 7000, "Tithe",    "successful", "DEMO-TITHE-007", iso(8)],
+  ];
+  for (const row of extraGiving) insGiving2.run(...row);
+}
+
 export type NotifyType = "sms" | "email";
 export function notify(type: NotifyType, recipient: string, subject: string, body: string): void {
   db.prepare(
