@@ -9,6 +9,7 @@ import notificationsRouter from "./notifications";
 import waitlistRouter from "./waitlist";
 import aiRouter from "./ai";
 import agentsRouter from "./agents";
+import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(notificationsRouter);
 router.use(waitlistRouter);
 router.use(aiRouter);
 router.use(agentsRouter);
+router.use(dashboardRouter);
 
 export default router;

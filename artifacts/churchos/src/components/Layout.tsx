@@ -1,12 +1,12 @@
 import { Link, useLocation } from "wouter";
 import { useGetUnreadNotificationsCount } from "@workspace/api-client-react";
-import { Bell, Home, UserPlus, FileText, Wallet, Users, Mic2, Inbox, Bot, Megaphone } from "lucide-react";
+import { Bell, LayoutDashboard, UserPlus, FileText, Wallet, Users, Mic2, Inbox, Bot, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
 const NAV = [
-  { href: "/app", label: "Dashboard", icon: Home },
-  { href: "/app/visitors", label: "Visitors", icon: UserPlus },
+  { href: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app/visitors", label: "Visitors", icon: UserPlus, startHere: true },
   { href: "/app/bulletin", label: "Sunday Prep", icon: FileText },
   { href: "/app/giving", label: "Giving", icon: Wallet },
   { href: "/app/members", label: "Members", icon: Users },
@@ -20,6 +20,13 @@ export function Layout({ children }: { children: ReactNode }) {
   const { data: unread } = useGetUnreadNotificationsCount({
     query: { refetchInterval: 5000 } as any,
   });
+  const [showStartHere] = useState(() => !localStorage.getItem("churchos_tour_seen"));
+
+  function markTourSeen() {
+    localStorage.setItem("churchos_tour_seen", "1");
+  }
+
+  const pendingCount = unread?.unread ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex">
@@ -38,6 +45,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={item.startHere ? markTourSeen : undefined}
                 className={cn(
                   "flex items-center gap-3 px-6 py-2.5 text-sm hover-elevate active-elevate-2 transition-colors",
                   active ? "bg-slate-800 text-amber-400 border-l-2 border-amber-400" : "text-slate-300",
@@ -45,7 +53,10 @@ export function Layout({ children }: { children: ReactNode }) {
                 data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <Icon className="w-4 h-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.startHere && showStartHere && (
+                  <span className="text-[10px] text-amber-400 font-semibold">Start here →</span>
+                )}
               </Link>
             );
           })}
@@ -61,23 +72,23 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="flex items-center gap-3">
             <Inbox className="w-4 h-4" /> Inbox
           </span>
-          {unread && unread.unread > 0 ? (
+          {pendingCount > 0 ? (
             <span
               className="bg-amber-500 text-slate-900 text-xs font-bold px-2 py-0.5 rounded-full min-w-[1.25rem] text-center"
               data-testid="inbox-badge"
             >
-              {unread.unread}
+              {pendingCount}
             </span>
           ) : null}
         </Link>
         <div className="px-6 py-3 border-t border-slate-800 text-xs text-slate-500">
-          Demo mode · No real SMS sent
+          Preview mode — go live to reach your members directly
         </div>
       </aside>
       <main className="flex-1">
         <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between">
           <div className="text-sm text-slate-500 flex items-center gap-2">
-            <Bell className="w-4 h-4 text-amber-500" /> All notifications captured to Inbox (demo mode)
+            <Bell className="w-4 h-4 text-amber-500" /> Messages only reach members after your approval
           </div>
           <Link
             href="/"

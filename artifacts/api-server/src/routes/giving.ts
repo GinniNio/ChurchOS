@@ -147,14 +147,13 @@ router.get("/giving/insights", async (req, res) => {
     if (!exists) {
       const firstName = d.donorName.split(" ")[0];
       db.prepare(
-        "INSERT INTO notifications (type, recipient, subject, body, read) VALUES (?, ?, ?, ?, 0)",
+        "INSERT INTO notifications (type, recipient, subject, body, read, approvalStatus) VALUES (?, ?, ?, ?, 0, 'pending')",
       ).run(
         "pastoral-care-giving",
         "pastoral-team@demo.com",
-        `Pastoral care flag: ${d.donorName}`,
+        `Personal Outreach: ${d.donorName}`,
         `${d.donorName} was a consistent giver (gave ${d.givingCount} times, total ₦${d.totalGiven.toLocaleString()}) but has not given in ${d.daysSinceLastGift} days.\n\n` +
-          `⚠️ This is NOT a finance alert. This person may be going through hardship.\n` +
-          `We recommend a personal call from a pastor — not the finance team.\n` +
+          `A personal call from the pastoral team this week would mean a lot to them.\n` +
           `Their last known phone: ${d.donorPhone}\n\n` +
           `Suggested opening: 'Hi ${firstName}, I was just thinking about you and wanted to check in. How are you doing?' — no mention of giving.`,
       );

@@ -55,7 +55,6 @@ export default function Visitors() {
   const [seqLoading, setSeqLoading] = useState<number | null>(null);
   const [seqStats, setSeqStats] = useState<{ active: number; sentThisWeek: number } | null>(null);
 
-  // Fetch stats on mount (non-blocking)
   useState(() => {
     fetch(`/api/visitors/sequences/stats?church=${encodeURIComponent(CHURCH)}`)
       .then((r) => r.json())
@@ -72,10 +71,9 @@ export default function Visitors() {
   const create = useCreateVisitor({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Visitor added", description: "Welcome SMS + 14-day nurture sequence started." });
-        setForm({ fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true });
+        toast({ title: "Visitor added", description: "Welcome SMS + 14-day nurture sequence queued for approval." });
+        setForm({ fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true, consentGiven: false });
         invalidateAll();
-        // Refresh stats
         fetch(`/api/visitors/sequences/stats?church=${encodeURIComponent(CHURCH)}`)
           .then((r) => r.json()).then(setSeqStats).catch(() => {});
       },
@@ -87,7 +85,7 @@ export default function Visitors() {
   });
 
   const [form, setForm] = useState({
-    fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true,
+    fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true, consentGiven: false,
   });
 
   const openSequence = async (visitor: any) => {
@@ -108,7 +106,7 @@ export default function Visitors() {
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">Visitor Follow-Up</h1>
-          <p className="text-slate-500 mt-1">Capture first-time guests and trigger automatic welcome messages.</p>
+          <p className="text-slate-500 mt-1">Capture first-time guests and turn them into lifelong members.</p>
         </div>
         {seqStats && (
           <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2">
@@ -142,7 +140,7 @@ export default function Visitors() {
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              create.mutate({
+              (create.mutate as any)({
                 data: {
                   churchName: CHURCH,
                   fullName: form.fullName,
@@ -150,6 +148,7 @@ export default function Visitors() {
                   email: form.email || undefined,
                   howHeard: form.howHeard || undefined,
                   firstTime: form.firstTime,
+                  consentGiven: form.consentGiven ? 1 : 0,
                 },
               });
             }}
@@ -190,6 +189,16 @@ export default function Visitors() {
                 data-testid="check-first-time"
               />
               First-time visitor
+            </label>
+            <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.consentGiven}
+                onChange={(e) => setForm({ ...form, consentGiven: e.target.checked })}
+                className="mt-0.5 w-4 h-4"
+                data-testid="check-consent"
+              />
+              I'd like to receive updates and messages from {CHURCH} about services, events and community news.
             </label>
             <Button type="submit" disabled={create.isPending} className="w-full bg-slate-900 hover:bg-slate-800 text-white" data-testid="button-add-visitor">
               {create.isPending ? "Adding…" : "Add visitor + send welcome"}
@@ -259,7 +268,6 @@ export default function Visitors() {
         </div>
       </div>
 
-      {/* ── Nurture Sequence Modal ─────────────────────────────────────────── */}
       {seqModal && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
@@ -318,7 +326,7 @@ export default function Visitors() {
             </div>
 
             <div className="px-6 py-3 border-t border-slate-200 text-xs text-slate-400">
-              Steps fire automatically via the background scheduler · All messages captured to Inbox
+              Messages require approval in Inbox before reaching visitors
             </div>
           </div>
         </div>

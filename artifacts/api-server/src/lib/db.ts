@@ -141,6 +141,9 @@ try { db.exec("ALTER TABLE sermons ADD COLUMN transcript TEXT"); } catch { /* al
 try { db.exec("ALTER TABLE members ADD COLUMN birthday TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE members ADD COLUMN preferredLanguage TEXT DEFAULT 'English'"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE programs ADD COLUMN aiContext TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE notifications ADD COLUMN approvalStatus TEXT DEFAULT 'auto'"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE visitors ADD COLUMN consentGiven INTEGER DEFAULT 0"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE members ADD COLUMN consentGiven INTEGER DEFAULT 0"); } catch { /* already exists */ }
 // Seed birthday from joinDate where not already set (demo purposes)
 db.exec("UPDATE members SET birthday = joinDate WHERE birthday IS NULL AND joinDate IS NOT NULL");
 
@@ -192,7 +195,7 @@ export function rowToVisitor(r: any) {
   return { ...r, firstTime: !!r.firstTime };
 }
 export function rowToNotification(r: any) {
-  return { ...r, read: !!r.read };
+  return { ...r, read: !!r.read, approvalStatus: r.approvalStatus ?? "auto" };
 }
 
 function seedIfEmpty() {

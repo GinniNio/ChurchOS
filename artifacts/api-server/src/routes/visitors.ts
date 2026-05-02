@@ -12,7 +12,7 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function createNurtureSequence(visitorId: number, visitor: any) {
+function createNurtureSequence(visitorId: number, visitor: any, consentGiven = 0) {
   const firstName = visitor.fullName.split(" ")[0];
   const church = visitor.churchName;
   const phone = visitor.phone;
@@ -27,6 +27,10 @@ function createNurtureSequence(visitorId: number, visitor: any) {
 
   const sermonTitle = latestSermon?.title ?? "this week's message";
   const sermonPreacher = latestSermon?.preacher ?? "our pastor";
+
+  const noConsentWarning = consentGiven === 0
+    ? "\n\n⚠️ This visitor did not opt in to communications. Review carefully before approving."
+    : "";
 
   const steps = [
     {
@@ -91,7 +95,7 @@ function createNurtureSequence(visitorId: number, visitor: any) {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const insNotif = db.prepare(
-    "INSERT INTO notifications (type, recipient, subject, body) VALUES (?, ?, ?, ?)",
+    "INSERT INTO notifications (type, recipient, subject, body, approvalStatus) VALUES (?, ?, ?, ?, 'pending')",
   );
 
   const tx = db.transaction(() => {
@@ -109,7 +113,7 @@ function createNurtureSequence(visitorId: number, visitor: any) {
         "sequence-scheduled",
         s.recipient,
         `[Day ${[0,3,7,10,14][s.step - 1]}] ${s.subject}`,
-        s.body,
+        s.body + noConsentWarning,
       );
     }
   });
@@ -149,11 +153,12 @@ router.get("/visitors/summary", (req, res) => {
 
 router.post("/visitors", (req, res) => {
   const body = CreateVisitorBody.parse(req.body);
+  const consentGiven = req.body.consentGiven ? 1 : 0;
   const today = new Date().toISOString().slice(0, 10);
   const info = db
     .prepare(
-      `INSERT INTO visitors (churchName, fullName, phone, email, howHeard, firstTime, visitDate, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'new')`,
+      `INSERT INTO visitors (churchName, fullName, phone, email, howHeard, firstTime, visitDate, status, consentGiven)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?)`,
     )
     .run(
       body.churchName,
@@ -163,6 +168,7 @@ router.post("/visitors", (req, res) => {
       body.howHeard ?? null,
       body.firstTime === false ? 0 : 1,
       today,
+      consentGiven,
     );
   notify(
     "sms",
@@ -182,7 +188,7 @@ router.post("/visitors", (req, res) => {
 
   // Auto-trigger 14-day nurture sequence
   try {
-    createNurtureSequence(Number(info.lastInsertRowid), row);
+    createNurtureSequence(Number(info.lastInsertRowid), row, consentGiven);
   } catch (err) {
     // Non-fatal — sequence creation failure should not block visitor creation
   }
@@ -225,7 +231,7 @@ router.post("/visitors/:id/start-sequence", (req, res) => {
   // Remove any existing pending sequence steps first (idempotent restart)
   db.prepare("DELETE FROM visitor_sequences WHERE visitorId = ? AND status = 'pending'").run(id);
 
-  createNurtureSequence(id, visitor);
+  createNurtureSequence(id, visitor, visitor.consentGiven ?? 0);
 
   const steps = db
     .prepare("SELECT * FROM visitor_sequences WHERE visitorId = ? ORDER BY step ASC")
@@ -244,7 +250,6 @@ router.get("/visitors/sequences", (req, res) => {
 
 router.get("/visitors/sequences/stats", (req, res) => {
   const church = (req.query.church as string) || "Demo Church Lagos";
-  // Sequences active = distinct visitors with ≥1 pending step belonging to this church
   const active = (db.prepare(
     `SELECT COUNT(DISTINCT vs.visitorId) AS c
      FROM visitor_sequences vs

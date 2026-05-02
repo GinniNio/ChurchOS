@@ -4,14 +4,50 @@ import { useJoinWaitlist } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, FileText, Wallet, Users, Mic2, Check } from "lucide-react";
+import { UserPlus, FileText, Wallet, Users, Mic2, Check, AlertCircle } from "lucide-react";
 
 const FEATURES = [
-  { icon: UserPlus, title: "Visitor Follow-Up", desc: "Capture every first-time visitor and trigger automatic SMS welcome + cell-leader assignment so no soul falls through the cracks." },
-  { icon: FileText, title: "Sunday Prep", desc: "Generate a clean printable Sunday bulletin in 60 seconds — sermon title, scripture readings, main points, announcements, offering theme." },
-  { icon: Wallet, title: "Church Giving", desc: "Receive tithes, offerings, building project, and missions giving with simulated mobile-money confirmations and a category-by-category dashboard." },
-  { icon: Users, title: "Member Tracker", desc: "Mark Sunday attendance, auto-detect ghost members after 6 missed services, and alert their cell leader by email instantly." },
-  { icon: Mic2, title: "Sermon Archive", desc: "Upload sermon audio, share it with members, count plays, and auto-publish a podcast RSS feed for Apple/Google Podcasts." },
+  {
+    icon: UserPlus,
+    title: "Visitor Follow-Up",
+    desc: "Turn first-time visitors into lifelong members",
+    primary: true,
+  },
+  {
+    icon: FileText,
+    title: "Sunday Prep",
+    desc: "Professional Sundays in 20 minutes",
+  },
+  {
+    icon: Wallet,
+    title: "Church Giving",
+    desc: "Simple, trustworthy giving for your congregation",
+  },
+  {
+    icon: Users,
+    title: "Member Tracker",
+    desc: "Know who needs a call before they slip away",
+  },
+  {
+    icon: Mic2,
+    title: "Sermon Archive",
+    desc: "Every sermon. Findable. Shareable. Forever.",
+  },
+];
+
+const PROBLEMS = [
+  {
+    title: "Visitors leave and never come back",
+    body: "Most churches have no system for following up. The first Sunday is the only Sunday they ever see.",
+  },
+  {
+    title: "Members drift away unnoticed",
+    body: "By the time you realise someone is gone, they already left. No one saw it coming.",
+  },
+  {
+    title: "Sundays take all week to prepare",
+    body: "Bulletins, slides, announcements — every week someone spends hours on things that should take minutes.",
+  },
 ];
 
 export default function Landing() {
@@ -46,51 +82,100 @@ export default function Landing() {
         </div>
       </header>
 
+      {/* HERO */}
       <section className="bg-gradient-to-b from-slate-900 to-slate-800 text-white">
-        <div className="max-w-6xl mx-auto px-6 py-20 text-center">
+        <div className="max-w-6xl mx-auto px-6 py-24 text-center">
           <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-            Run your church with <span className="text-amber-400">peace of mind</span>
+            Grow Your Church.<br />
+            <span className="text-amber-400">Keep Every Member.</span>
           </h1>
           <p className="mt-6 text-lg text-slate-300 max-w-2xl mx-auto">
-            ChurchOS is the all-in-one platform built for Nigerian churches — visitor follow-up,
-            Sunday bulletins, giving, member tracking, and sermon archives.
+            The all-in-one tool for Nigerian churches — visitor follow-up, member retention, giving, sermons, and Sunday prep.
+            Everything in one place. Built for how Nigerian churches actually work.
           </p>
-          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+
+          <div className="mt-10 flex flex-col items-center gap-4">
             <Link
               href="/app"
-              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-3 rounded text-base"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-8 py-4 rounded-lg text-lg"
               data-testid="cta-try-demo"
             >
-              Try the live demo
+              Try ChurchOS Free →
             </Link>
             <a
-              href="#waitlist"
-              className="border border-slate-600 hover:bg-slate-800 text-white px-6 py-3 rounded text-base"
+              href={`/visitor/form?church=Demo+Church+Lagos`}
+              className="text-slate-300 hover:text-white text-sm underline"
             >
-              Join the waitlist
+              See a live demo →
             </a>
           </div>
-          <div className="mt-6 text-xs text-slate-400">
-            Demo mode · all SMS &amp; email captured to Inbox · no real messages sent
+
+          <div className="mt-6 text-sm text-slate-400">
+            Join churches across Nigeria using ChurchOS to grow their congregation
+          </div>
+
+          <div className="mt-8 text-xs text-slate-500 border border-slate-700 rounded-lg px-4 py-2 inline-block">
+            Preview mode — go live to reach your members directly
           </div>
         </div>
       </section>
 
+      {/* THE PROBLEM */}
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <h2 className="text-3xl font-bold text-center mb-4">Sound familiar?</h2>
+        <p className="text-slate-500 text-center mb-12 max-w-xl mx-auto">Every church faces these challenges. ChurchOS is built to solve them.</p>
+        <div className="grid md:grid-cols-3 gap-6">
+          {PROBLEMS.map((p) => (
+            <div key={p.title} className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+              <AlertCircle className="w-6 h-6 text-amber-500 mb-3" />
+              <h3 className="font-bold text-base mb-2">{p.title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">{p.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* VISITOR FOCUS — Primary CTA */}
+      <section className="bg-amber-500">
+        <div className="max-w-4xl mx-auto px-6 py-16 text-center">
+          <div className="inline-block bg-amber-600 text-amber-100 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
+            Start here
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+            Turn first-time visitors into lifelong members
+          </h2>
+          <p className="text-slate-800 mb-6 text-lg">
+            Set up your visitor follow-up page in under 5 minutes. Capture every guest, send a welcome message, and start a 14-day nurture sequence — automatically.
+          </p>
+          <Link
+            href="/app/visitors"
+            className="inline-block bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 py-4 rounded-lg text-base"
+          >
+            Set Up Your Visitor Page →
+          </Link>
+          <div className="mt-4 text-sm text-slate-700">
+            Start free with visitor follow-up. Unlock the full suite as you grow.
+          </div>
+        </div>
+      </section>
+
+      {/* WHAT'S INCLUDED */}
       <section id="features" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-bold text-center mb-12">Everything your church needs, in one place</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <h2 className="text-2xl font-bold text-center mb-3">What's included</h2>
+        <p className="text-slate-500 text-center mb-12">Five tools. One platform. Everything your church needs to grow.</p>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
               <div
                 key={f.title}
-                className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm"
+                className={`rounded-xl p-6 border shadow-sm ${f.primary ? "border-amber-300 bg-amber-50" : "bg-white border-slate-200"}`}
                 data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 ${f.primary ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-600"}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">{f.title}</h3>
+                <h3 className="font-bold text-base mb-1">{f.title}</h3>
                 <p className="text-sm text-slate-600 leading-relaxed">{f.desc}</p>
               </div>
             );
@@ -98,7 +183,27 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="bg-white py-20">
+      {/* TRUST SIGNAL */}
+      <section className="bg-white py-16">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <p className="text-xl text-slate-700 font-medium leading-relaxed mb-6">
+            "ChurchOS is built on a simple belief: a well-organised church is a church that can focus on what matters — people."
+          </p>
+          <div className="grid md:grid-cols-2 gap-4 text-sm text-slate-600">
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <strong className="block text-slate-900 mb-1">Your data stays yours</strong>
+              No ads. No data selling. Your congregation's information never leaves ChurchOS.
+            </div>
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <strong className="block text-green-900 mb-1">You control every message</strong>
+              Messages only reach your members when you approve them. ChurchOS never sends automatically.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section className="bg-slate-50 py-20">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Simple, transparent pricing</h2>
           <p className="text-slate-600 mb-12">Pay monthly. Cancel anytime. Free during early access.</p>
@@ -110,7 +215,7 @@ export default function Landing() {
             ].map((p) => (
               <div
                 key={p.name}
-                className={`rounded-lg p-6 border text-left ${p.featured ? "border-amber-500 ring-2 ring-amber-200 shadow-lg bg-white" : "border-slate-200 bg-white"}`}
+                className={`rounded-xl p-6 border text-left ${p.featured ? "border-amber-500 ring-2 ring-amber-200 shadow-lg bg-white" : "border-slate-200 bg-white"}`}
               >
                 {p.featured && (
                   <div className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">Most popular</div>
@@ -131,6 +236,7 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* WAITLIST */}
       <section id="waitlist" className="bg-slate-900 text-white py-20">
         <div className="max-w-xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-3">Join the waitlist</h2>
@@ -173,7 +279,7 @@ export default function Landing() {
       </section>
 
       <footer className="bg-slate-950 text-slate-500 py-8 text-center text-xs">
-        © {new Date().getFullYear()} ChurchOS · Built for Nigerian churches · Demo mode
+        © {new Date().getFullYear()} ChurchOS · Built for Nigerian churches · Trusted Church
       </footer>
     </div>
   );

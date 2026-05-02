@@ -171,16 +171,16 @@ router.get("/members/drift-risk", async (req, res) => {
       .get(`%${m.fullName}%`);
     if (!exists) {
       db.prepare(
-        "INSERT INTO notifications (type, recipient, subject, body) VALUES (?, ?, ?, ?)",
+        "INSERT INTO notifications (type, recipient, subject, body, approvalStatus) VALUES (?, ?, ?, ?, 'pending')",
       ).run(
         "drift-risk",
         m.cellLeaderEmail ?? "pastor@demo.com",
-        `Early warning: ${m.fullName} — ${m.cellGroup}`,
-        `Our system has detected early drift signals for ${m.fullName} in ${m.cellGroup}.\n` +
+        `Engagement alert: ${m.fullName} — ${m.cellGroup}`,
+        `Our system has detected early engagement signals for ${m.fullName} in ${m.cellGroup}.\n` +
           `They are not yet officially absent but engagement indicators suggest they may be drifting.\n\n` +
           `Suggested message to send them this week:\n'${m.suggestedMessage}'\n\n` +
           `Sending this message now takes 30 seconds and could retain a member.\n` +
-          `Last attendance: ${m.lastAttendance ?? "unknown"} | Score: ${m.driftScore}/100`,
+          `Last seen: ${m.lastAttendance ?? "unknown"}`,
       );
       newFlags++;
     }
@@ -242,7 +242,7 @@ router.post("/attendance", (req, res) => {
       notify(
         "email",
         m.cellLeaderEmail,
-        `${status === "ghost" ? "Ghost" : "At-Risk"} Member Alert: ${m.fullName}`,
+        `Retention Alert: ${m.fullName}`,
         `${m.fullName} (${m.cellGroup}) has missed ${misses} consecutive services. Please reach out today.`,
       );
       alertsSent++;

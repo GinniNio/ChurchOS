@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CHURCH, formatDate } from "@/lib/format";
+import { CheckCircle } from "lucide-react";
+import { GettingStartedBanner } from "@/components/GettingStartedBanner";
 
 const API = "/api";
 
@@ -26,11 +28,11 @@ const STATUS_STYLE: Record<string, string> = {
   inactive: "bg-slate-200 text-slate-700",
 };
 
-const DRIFT_STYLE: Record<string, string> = {
-  Healthy: "bg-green-100 text-green-800",
-  Watch: "bg-blue-100 text-blue-800",
-  "Drift Risk": "bg-amber-100 text-amber-800",
-  "High Risk": "bg-red-100 text-red-800",
+const STATUS_LABEL: Record<string, string> = {
+  active: "active",
+  atRisk: "Needs Attention",
+  ghost: "Lapsed",
+  inactive: "inactive",
 };
 
 type DriftMember = {
@@ -42,6 +44,7 @@ type DriftMember = {
   driftLevel: string;
   suggestedMessage: string;
   phone: string;
+  consentGiven?: number;
 };
 
 type DriftResult = {
@@ -53,23 +56,17 @@ type DriftResult = {
   newFlags: number;
 };
 
-function DriftScoreBar({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const color =
-    pct <= 20 ? "bg-green-500" : pct <= 40 ? "bg-blue-500" : pct <= 60 ? "bg-amber-500" : "bg-red-500";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs font-bold text-slate-600 w-8 text-right">{score}</span>
-    </div>
-  );
+function actionLabel(score: number): { text: string; style: string } | null {
+  if (score <= 20) return null;
+  if (score <= 40) return { text: "Monitor", style: "bg-slate-200 text-slate-700" };
+  if (score <= 60) return { text: "Reach out this week", style: "bg-amber-100 text-amber-800" };
+  return { text: "Call today", style: "bg-red-100 text-red-800" };
 }
 
 function MemberDriftCard({ m }: { m: DriftMember }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const action = actionLabel(m.driftScore);
 
   function copy() {
     navigator.clipboard.writeText(m.suggestedMessage).then(
@@ -85,13 +82,11 @@ function MemberDriftCard({ m }: { m: DriftMember }) {
           <div className="font-semibold">{m.fullName}</div>
           <div className="text-xs text-slate-500">{m.cellGroup} · Last seen: {m.lastAttendance ? formatDate(m.lastAttendance) : "Never"}</div>
         </div>
-        <Badge variant="secondary" className={DRIFT_STYLE[m.driftLevel] ?? "bg-slate-200"}>
-          {m.driftLevel}
-        </Badge>
-      </div>
-      <div>
-        <div className="text-xs text-slate-500 mb-1">Drift Score</div>
-        <DriftScoreBar score={m.driftScore} />
+        {action && (
+          <Badge variant="secondary" className={action.style}>
+            {action.text}
+          </Badge>
+        )}
       </div>
       <div className="bg-slate-50 rounded p-3 text-sm text-slate-700 border border-slate-200">
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Suggested Message</div>
@@ -118,7 +113,7 @@ function EarlyWarningTab() {
       const d: DriftResult = await r.json();
       setData(d);
       if (d.newFlags > 0) {
-        toast({ title: `${d.newFlags} new High Risk flag${d.newFlags > 1 ? "s" : ""} created in Inbox` });
+        toast({ title: `${d.newFlags} new Priority follow-up alert${d.newFlags > 1 ? "s" : ""} added to Inbox` });
       }
     } catch (e: any) {
       toast({ title: "Analysis failed", description: e.message, variant: "destructive" });
@@ -133,9 +128,9 @@ function EarlyWarningTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-lg">AI Drift Risk Analysis — {CHURCH}</h2>
+          <h2 className="font-bold text-lg">Member Retention Tracker — {CHURCH}</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Scores every member across attendance, tenure, and giving signals to predict who may be drifting.
+            Scores every member across attendance, tenure, and giving signals to predict who needs outreach.
           </p>
         </div>
         <Button
@@ -144,19 +139,18 @@ function EarlyWarningTab() {
           onClick={runAnalysis}
           data-testid="button-run-drift"
         >
-          {loading ? "Analysing…" : "Run AI Analysis"}
+          {loading ? "Analysing…" : "Run Analysis"}
         </Button>
       </div>
 
       {data && (
         <>
-          {/* Stat cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: "Healthy", value: data.healthy.length, color: "text-green-700", bg: "bg-green-50 border-green-200" },
               { label: "Watching", value: data.watch.length, color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
-              { label: "Drift Risk", value: data.driftRisk.length, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
-              { label: "High Risk", value: data.highRisk.length, color: "text-red-700", bg: "bg-red-50 border-red-200" },
+              { label: "Engagement Alert", value: data.driftRisk.length, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
+              { label: "Priority Follow-up", value: data.highRisk.length, color: "text-red-700", bg: "bg-red-50 border-red-200" },
             ].map((s) => (
               <div key={s.label} className={`rounded-lg p-4 border ${s.bg}`}>
                 <div className="text-xs uppercase tracking-wider text-slate-500">{s.label}</div>
@@ -165,54 +159,36 @@ function EarlyWarningTab() {
             ))}
           </div>
 
-          {/* Congregation health bar */}
           {data.totalMembers > 0 && (
             <div>
               <div className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wider">Congregation Health</div>
               <div className="flex h-4 rounded-full overflow-hidden gap-px bg-slate-200">
                 {data.healthy.length > 0 && (
-                  <div
-                    className="bg-green-500 h-full"
-                    style={{ width: `${(data.healthy.length / data.totalMembers) * 100}%` }}
-                    title={`Healthy: ${data.healthy.length}`}
-                  />
+                  <div className="bg-green-500 h-full" style={{ width: `${(data.healthy.length / data.totalMembers) * 100}%` }} title={`Healthy: ${data.healthy.length}`} />
                 )}
                 {data.watch.length > 0 && (
-                  <div
-                    className="bg-blue-400 h-full"
-                    style={{ width: `${(data.watch.length / data.totalMembers) * 100}%` }}
-                    title={`Watch: ${data.watch.length}`}
-                  />
+                  <div className="bg-blue-400 h-full" style={{ width: `${(data.watch.length / data.totalMembers) * 100}%` }} title={`Watch: ${data.watch.length}`} />
                 )}
                 {data.driftRisk.length > 0 && (
-                  <div
-                    className="bg-amber-400 h-full"
-                    style={{ width: `${(data.driftRisk.length / data.totalMembers) * 100}%` }}
-                    title={`Drift Risk: ${data.driftRisk.length}`}
-                  />
+                  <div className="bg-amber-400 h-full" style={{ width: `${(data.driftRisk.length / data.totalMembers) * 100}%` }} title={`Engagement Alert: ${data.driftRisk.length}`} />
                 )}
                 {data.highRisk.length > 0 && (
-                  <div
-                    className="bg-red-500 h-full"
-                    style={{ width: `${(data.highRisk.length / data.totalMembers) * 100}%` }}
-                    title={`High Risk: ${data.highRisk.length}`}
-                  />
+                  <div className="bg-red-500 h-full" style={{ width: `${(data.highRisk.length / data.totalMembers) * 100}%` }} title={`Priority Follow-up: ${data.highRisk.length}`} />
                 )}
               </div>
               <div className="flex gap-4 mt-1.5 text-xs text-slate-400">
                 <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />Healthy</span>
                 <span><span className="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1" />Watch</span>
-                <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Drift Risk</span>
-                <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />High Risk</span>
+                <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />Engagement Alert</span>
+                <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Priority Follow-up</span>
               </div>
             </div>
           )}
 
-          {/* Members needing attention */}
           {attention.length > 0 ? (
             <div>
               <h3 className="font-semibold mb-3 text-slate-700">
-                Members Needing Attention ({attention.length})
+                Members Needing Outreach ({attention.length})
               </h3>
               <div className="grid md:grid-cols-2 gap-4">
                 {attention.map((m) => (
@@ -222,20 +198,19 @@ function EarlyWarningTab() {
             </div>
           ) : (
             <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-green-700">
-              🎉 All members are healthy — no drift risk detected.
+              🎉 All members are healthy — no engagement alerts detected.
             </div>
           )}
 
-          {/* Scoring explanation */}
           <details className="text-sm">
             <summary className="cursor-pointer text-slate-500 hover:text-slate-700 select-none">
               ℹ️ How is this score calculated?
             </summary>
             <div className="mt-2 bg-slate-50 rounded-lg p-4 border border-slate-200 text-slate-600 space-y-1">
               <p><strong>Attendance (40 pts max)</strong> — consecutive misses weighted by how many weeks missed</p>
-              <p><strong>Tenure (30 pts max)</strong> — long-standing members who start missing are higher risk than new ones</p>
+              <p><strong>Tenure (30 pts max)</strong> — long-standing members who start missing are higher priority than new ones</p>
               <p><strong>Giving (30 pts max)</strong> — cross-referenced with giving history; sudden silence in giving is an early signal</p>
-              <p className="mt-2 text-xs text-slate-400">Score 0-20: Healthy · 21-40: Watch · 41-60: Drift Risk · 61-100: High Risk</p>
+              <p className="mt-2 text-xs text-slate-400">Score 0-20: Healthy · 21-40: Monitor · 41-60: Reach out this week · 61-100: Call today</p>
             </div>
           </details>
         </>
@@ -243,7 +218,7 @@ function EarlyWarningTab() {
 
       {!data && !loading && (
         <div className="bg-white rounded-lg border border-dashed border-slate-200 p-12 text-center text-slate-400 text-sm">
-          Click "Run AI Analysis" to score every member for drift risk.
+          Click "Run Analysis" to identify which members need a personal outreach this week.
         </div>
       )}
     </div>
@@ -266,6 +241,7 @@ export default function Members() {
     cellGroup: "Faith Cell",
     cellLeaderEmail: "",
     preferredLanguage: "English",
+    consentGiven: false,
   });
 
   const invalidateAll = () => {
@@ -292,7 +268,7 @@ export default function Members() {
       onSuccess: () => {
         toast({ title: "Member added" });
         setShowAdd(false);
-        setForm({ fullName: "", phone: "", email: "", cellGroup: "Faith Cell", cellLeaderEmail: "", preferredLanguage: "English" });
+        setForm({ fullName: "", phone: "", email: "", cellGroup: "Faith Cell", cellLeaderEmail: "", preferredLanguage: "English", consentGiven: false });
         invalidateAll();
       },
     },
@@ -300,10 +276,12 @@ export default function Members() {
 
   return (
     <Layout>
+      <GettingStartedBanner />
+
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Member Tracker</h1>
-          <p className="text-slate-500 mt-1">Mark attendance, auto-detect ghost members, alert cell leaders.</p>
+          <h1 className="text-3xl font-bold">Member Retention Tracker</h1>
+          <p className="text-slate-500 mt-1">Mark attendance, spot who needs a call, and keep every member connected.</p>
         </div>
         <Button variant="outline" onClick={() => setShowAdd(!showAdd)} data-testid="button-toggle-add-member">
           {showAdd ? "Close" : "+ Add member"}
@@ -314,8 +292,8 @@ export default function Members() {
         {[
           { label: "Total", value: summary.data?.total ?? 0, color: "text-slate-900" },
           { label: "Active", value: summary.data?.active ?? 0, color: "text-green-700" },
-          { label: "At-Risk", value: summary.data?.atRisk ?? 0, color: "text-amber-700" },
-          { label: "Ghost", value: summary.data?.ghost ?? 0, color: "text-red-700" },
+          { label: "Needs Attention", value: summary.data?.atRisk ?? 0, color: "text-amber-700" },
+          { label: "Lapsed Members", value: summary.data?.ghost ?? 0, color: "text-red-700" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-lg p-4 border border-slate-200">
             <div className="text-xs uppercase tracking-wider text-slate-500">{s.label}</div>
@@ -329,16 +307,16 @@ export default function Members() {
           className="bg-white rounded-lg p-6 border border-slate-200 mb-6 grid md:grid-cols-2 gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            create.mutate({
-              data: {
-                churchName: CHURCH,
-                fullName: form.fullName,
-                phone: form.phone,
-                email: form.email || undefined,
-                cellGroup: form.cellGroup,
-                cellLeaderEmail: form.cellLeaderEmail || undefined,
-              },
-            });
+            const payload: any = {
+              churchName: CHURCH,
+              fullName: form.fullName,
+              phone: form.phone,
+              email: form.email || undefined,
+              cellGroup: form.cellGroup,
+              cellLeaderEmail: form.cellLeaderEmail || undefined,
+              consentGiven: form.consentGiven ? 1 : 0,
+            };
+            create.mutate({ data: payload });
           }}
         >
           <div><Label>Full name</Label><Input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} data-testid="input-member-name" /></div>
@@ -360,11 +338,22 @@ export default function Members() {
               <option>Hausa</option>
             </select>
           </div>
+          <div className="md:col-span-2">
+            <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.consentGiven}
+                onChange={(e) => setForm({ ...form, consentGiven: e.target.checked })}
+                className="mt-0.5 w-4 h-4"
+                data-testid="check-member-consent"
+              />
+              This member has given permission to receive church communications and follow-up messages.
+            </label>
+          </div>
           <div className="md:col-span-2"><Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" data-testid="button-save-member">Save member</Button></div>
         </form>
       )}
 
-      {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {[
           { key: "attendance", label: "Attendance" },
@@ -418,10 +407,17 @@ export default function Members() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {list.data?.map((m) => (
+              {list.data?.map((m: any) => (
                 <tr key={m.id} data-testid={`member-row-${m.id}`}>
                   <td className="px-4 py-3">
-                    <div className="font-medium">{m.fullName}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{m.fullName}</span>
+                      {m.consentGiven ? (
+                        <span title="Communications consent given">
+                          <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="text-xs text-slate-500">{m.phone}</div>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{m.cellGroup}</td>
@@ -429,7 +425,7 @@ export default function Members() {
                   <td className="px-4 py-3 font-bold">{m.consecutiveMisses}</td>
                   <td className="px-4 py-3">
                     <Badge variant="secondary" className={STATUS_STYLE[m.status] ?? "bg-slate-200"}>
-                      {m.status === "atRisk" ? "at-risk" : m.status}
+                      {STATUS_LABEL[m.status] ?? m.status}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-center">

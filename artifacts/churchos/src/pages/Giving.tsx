@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CHURCH, formatDate, formatNaira } from "@/lib/format";
 import { Brain, TrendingUp, AlertCircle, Users, RefreshCw } from "lucide-react";
+import { GettingStartedBanner } from "@/components/GettingStartedBanner";
 
 const CATEGORIES = ["Tithe", "Offering", "Building Project", "Missions", "Welfare"];
 
@@ -56,8 +57,8 @@ export default function Giving() {
       if (data.pastoralFlags > 0) {
         qc.invalidateQueries({ queryKey: getGetUnreadNotificationsCountQueryKey() });
         toast({
-          title: `${data.pastoralFlags} pastoral care flag${data.pastoralFlags > 1 ? "s" : ""} raised`,
-          description: "Check Inbox for details.",
+          title: `${data.pastoralFlags} personal outreach alert${data.pastoralFlags > 1 ? "s" : ""} raised`,
+          description: "Check Inbox to review before sending.",
         });
       }
     } catch {
@@ -91,9 +92,11 @@ export default function Giving() {
 
   return (
     <Layout>
+      <GettingStartedBanner />
+
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">Church Giving</h1>
-        <p className="text-slate-500 mt-1">Simulated mobile-money giving with receipts &amp; reports.</p>
+        <h1 className="text-3xl font-bold">Church Giving Summary</h1>
+        <p className="text-slate-500 mt-1">Simple, trustworthy giving for your congregation.</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4 mb-6">
@@ -118,14 +121,14 @@ export default function Giving() {
         </div>
       </div>
 
-      {/* ── AI Giving Intelligence ────────────────────────────────────────── */}
+      {/* ── Giving Insights ────────────────────────────────────────────── */}
       <div className="mb-6 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200 p-6">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-amber-500" />
             <div>
-              <div className="font-bold">Giving Intelligence</div>
-              <div className="text-xs text-slate-500">AI-powered pastoral care signals — not a finance report</div>
+              <div className="font-bold">Giving Insights</div>
+              <div className="text-xs text-slate-500">Member giving patterns and personal outreach signals</div>
             </div>
           </div>
           <Button
@@ -143,13 +146,12 @@ export default function Giving() {
 
         {!insights && !insightsLoading && (
           <p className="text-sm text-slate-400 text-center py-4">
-            Click "Run Analysis" to detect consistent givers, silent givers, and generate a pastoral summary.
+            Click "Run Analysis" to identify consistent givers and members who may need a personal check-in.
           </p>
         )}
 
         {insights && (
           <div className="space-y-4">
-            {/* AI summary */}
             {insights.aiSummary && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-1.5">Pastoral Summary</div>
@@ -157,12 +159,11 @@ export default function Giving() {
               </div>
             )}
 
-            {/* Stat row */}
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: "Total givers", value: insights.totalGivers, icon: Users },
                 { label: "Consistent", value: insights.consistentGivers.length, icon: TrendingUp, color: "text-green-600" },
-                { label: "Silent (care needed)", value: insights.silentGivers.length, icon: AlertCircle, color: "text-amber-600" },
+                { label: "Outreach Alerts", value: insights.silentGivers.length, icon: AlertCircle, color: "text-amber-600" },
               ].map((s) => {
                 const Icon = s.icon;
                 return (
@@ -175,7 +176,6 @@ export default function Giving() {
               })}
             </div>
 
-            {/* Top givers */}
             {insights.topGivers.length > 0 && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Top givers</div>
@@ -190,11 +190,10 @@ export default function Giving() {
               </div>
             )}
 
-            {/* Silent givers */}
             {insights.silentGivers.length > 0 && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-amber-600 mb-2 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> Pastoral care flags ({insights.silentGivers.length})
+                  <AlertCircle className="w-3 h-3" /> Members to check in with ({insights.silentGivers.length})
                 </div>
                 <div className="space-y-1.5">
                   {insights.silentGivers.map((g) => (
@@ -203,7 +202,7 @@ export default function Giving() {
                       <div className="text-xs text-slate-500 mt-0.5">
                         Gave {g.givingCount}× · last gift {g.daysSinceLastGift} days ago · {formatNaira(g.totalGiven)} total
                       </div>
-                      <div className="text-xs text-amber-700 mt-1">⚠️ Not a finance alert — suggest a pastoral check-in call</div>
+                      <div className="text-xs text-amber-700 mt-1">A personal call from the pastoral team this week would mean a lot to them.</div>
                     </div>
                   ))}
                 </div>
@@ -212,14 +211,14 @@ export default function Giving() {
 
             {insights.pastoralFlags > 0 && (
               <p className="text-xs text-slate-400">
-                {insights.pastoralFlags} new pastoral care notification{insights.pastoralFlags > 1 ? "s" : ""} added to Inbox.
+                {insights.pastoralFlags} personal outreach notification{insights.pastoralFlags > 1 ? "s" : ""} added to Inbox for your review.
               </p>
             )}
           </div>
         )}
       </div>
 
-      {/* ── existing giving form + table ──────────────────────────────────── */}
+      {/* ── giving form + table ──────────────────────────────────────────────── */}
       <div className="grid md:grid-cols-3 gap-6">
         <div className="bg-white rounded-lg p-6 border border-slate-200 self-start">
           <h2 className="font-bold mb-4">New giving</h2>
@@ -238,18 +237,9 @@ export default function Giving() {
               });
             }}
           >
-            <div>
-              <Label>Donor name</Label>
-              <Input required value={form.donorName} onChange={(e) => setForm({ ...form, donorName: e.target.value })} data-testid="input-donor-name" />
-            </div>
-            <div>
-              <Label>Phone</Label>
-              <Input required value={form.donorPhone} onChange={(e) => setForm({ ...form, donorPhone: e.target.value })} data-testid="input-donor-phone" />
-            </div>
-            <div>
-              <Label>Amount (₦)</Label>
-              <Input required type="number" min="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="input-amount" />
-            </div>
+            <div><Label>Donor name</Label><Input required value={form.donorName} onChange={(e) => setForm({ ...form, donorName: e.target.value })} data-testid="input-donor-name" /></div>
+            <div><Label>Phone</Label><Input required value={form.donorPhone} onChange={(e) => setForm({ ...form, donorPhone: e.target.value })} data-testid="input-donor-phone" /></div>
+            <div><Label>Amount (₦)</Label><Input required type="number" min="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="input-amount" /></div>
             <div>
               <Label>Category</Label>
               <select
@@ -307,9 +297,7 @@ export default function Giving() {
                 </tr>
               ))}
               {list.data?.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">No giving recorded yet.</td>
-                </tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No giving recorded yet.</td></tr>
               )}
             </tbody>
           </table>
