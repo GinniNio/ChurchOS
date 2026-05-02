@@ -11,6 +11,8 @@ import Giving from "@/pages/Giving";
 import Members from "@/pages/Members";
 import Sermons from "@/pages/Sermons";
 import Inbox from "@/pages/Inbox";
+import Agent from "@/pages/Agent";
+import Announcements from "@/pages/Announcements";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 5_000 } },
@@ -27,6 +29,8 @@ function Router() {
       <Route path="/app/members" component={Members} />
       <Route path="/app/sermons" component={Sermons} />
       <Route path="/app/inbox" component={Inbox} />
+      <Route path="/app/agent" component={Agent} />
+      <Route path="/app/announcements" component={Announcements} />
       <Route component={NotFound} />
     </Switch>
   );

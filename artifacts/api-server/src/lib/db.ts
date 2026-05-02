@@ -138,6 +138,11 @@ CREATE INDEX IF NOT EXISTS idx_visitor_sequences_status ON visitor_sequences(sta
 
 // Additive migrations — wrapped in try/catch so they are safe on existing DBs
 try { db.exec("ALTER TABLE sermons ADD COLUMN transcript TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE members ADD COLUMN birthday TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE members ADD COLUMN preferredLanguage TEXT DEFAULT 'English'"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE programs ADD COLUMN aiContext TEXT"); } catch { /* already exists */ }
+// Seed birthday from joinDate where not already set (demo purposes)
+db.exec("UPDATE members SET birthday = joinDate WHERE birthday IS NULL AND joinDate IS NOT NULL");
 
 // Spread demo giving records across 90 days so consistent/silent detection works in demos
 {

@@ -8,6 +8,7 @@ import sermonsRouter from "./sermons";
 import notificationsRouter from "./notifications";
 import waitlistRouter from "./waitlist";
 import aiRouter from "./ai";
+import agentsRouter from "./agents";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(sermonsRouter);
 router.use(notificationsRouter);
 router.use(waitlistRouter);
 router.use(aiRouter);
+router.use(agentsRouter);
 
 export default router;

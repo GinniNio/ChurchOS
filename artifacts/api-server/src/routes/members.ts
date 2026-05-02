@@ -78,6 +78,122 @@ router.post("/members/seed", (req, res) => {
   res.json({ inserted });
 });
 
+// ── Drift Risk Predictor ────────────────────────────────────────────────────
+
+router.get("/members/drift-risk", async (req, res) => {
+  const church = (req.query.church as string) || "Demo Church Lagos";
+  const members = db
+    .prepare("SELECT * FROM members WHERE churchName = ?")
+    .all(church) as any[];
+  const giving = db
+    .prepare("SELECT * FROM giving WHERE churchName = ? AND status = 'successful'")
+    .all(church) as any[];
+
+  const now = Date.now();
+
+  function calcDriftScore(m: any): number {
+    let score = 0;
+    const misses = m.consecutiveMisses ?? 0;
+    const lastAtt = m.lastAttendance ? new Date(m.lastAttendance).getTime() : 0;
+    const daysAway = lastAtt ? Math.floor((now - lastAtt) / 86400000) : 999;
+    const joined = m.joinDate ? new Date(m.joinDate).getTime() : now;
+    const tenure = Math.floor((now - joined) / 86400000);
+
+    // Factor 1 — attendance (40pts max)
+    if (misses === 0 && daysAway <= 7) score += 0;
+    else if (misses === 0 && daysAway <= 14) score += 10;
+    else if (misses === 1) score += 25;
+    else score += 40;
+
+    // Factor 2 — tenure (30pts max)
+    if (tenure > 180 && misses >= 1) score += 30;
+    else if (tenure > 90 && misses >= 1) score += 15;
+
+    // Factor 3 — giving (30pts max)
+    const gifts = giving.filter((g) => g.donorPhone === m.phone);
+    if (gifts.length === 0) {
+      score += 10;
+    } else {
+      const lastGift = gifts.reduce((a: string, g: any) => (a > g.createdAt ? a : g.createdAt), "");
+      const daysSince = Math.floor((now - new Date(lastGift).getTime()) / 86400000);
+      if (daysSince >= 60) score += 30;
+      else if (daysSince >= 30) score += 20;
+    }
+    return Math.min(score, 100);
+  }
+
+  function driftLevel(score: number) {
+    if (score <= 20) return "Healthy";
+    if (score <= 40) return "Watch";
+    if (score <= 60) return "Drift Risk";
+    return "High Risk";
+  }
+
+  const { AI_ENABLED, openai, AI_MODEL } = await import("../lib/openai");
+
+  const scored = await Promise.all(
+    members.map(async (m) => {
+      const driftScore = calcDriftScore(m);
+      const level = driftLevel(driftScore);
+      const firstName = m.fullName.split(" ")[0];
+      const monthsJoined = Math.max(1, Math.floor((now - new Date(m.joinDate ?? now).getTime()) / (86400000 * 30)));
+
+      let suggestedMessage =
+        `Hi ${firstName}! Just thinking about you today and wanted to check in. ` +
+        `How are you doing? 🙏 — ${m.cellGroup} family`;
+
+      if ((level === "Drift Risk" || level === "High Risk") && AI_ENABLED) {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: AI_MODEL,
+            messages: [
+              {
+                role: "user",
+                content:
+                  `Write a warm, casual WhatsApp message (max 2 sentences) from a cell leader checking in on a church member named ${firstName} who has been attending ${church} for ${monthsJoined} month${monthsJoined > 1 ? "s" : ""}. The message should feel personal and caring, not robotic. No mention of attendance or giving. Sign it as 'Your ${m.cellGroup} family'. Nigerian-English tone is fine.`,
+              },
+            ],
+            max_tokens: 100,
+          });
+          suggestedMessage = completion.choices[0]?.message?.content?.trim() ?? suggestedMessage;
+        } catch { /* keep fallback */ }
+      }
+
+      return { ...m, driftScore, driftLevel: level, suggestedMessage };
+    }),
+  );
+
+  // Notifications for High Risk (deduplicated)
+  let newFlags = 0;
+  for (const m of scored.filter((s) => s.driftLevel === "High Risk")) {
+    const exists = db
+      .prepare("SELECT id FROM notifications WHERE type = 'drift-risk' AND subject LIKE ?")
+      .get(`%${m.fullName}%`);
+    if (!exists) {
+      db.prepare(
+        "INSERT INTO notifications (type, recipient, subject, body) VALUES (?, ?, ?, ?)",
+      ).run(
+        "drift-risk",
+        m.cellLeaderEmail ?? "pastor@demo.com",
+        `Early warning: ${m.fullName} — ${m.cellGroup}`,
+        `Our system has detected early drift signals for ${m.fullName} in ${m.cellGroup}.\n` +
+          `They are not yet officially absent but engagement indicators suggest they may be drifting.\n\n` +
+          `Suggested message to send them this week:\n'${m.suggestedMessage}'\n\n` +
+          `Sending this message now takes 30 seconds and could retain a member.\n` +
+          `Last attendance: ${m.lastAttendance ?? "unknown"} | Score: ${m.driftScore}/100`,
+      );
+      newFlags++;
+    }
+  }
+
+  const healthy = scored.filter((s) => s.driftLevel === "Healthy");
+  const watch = scored.filter((s) => s.driftLevel === "Watch");
+  const driftRisk = scored.filter((s) => s.driftLevel === "Drift Risk");
+  const highRisk = scored.filter((s) => s.driftLevel === "High Risk");
+
+  res.json({ totalMembers: members.length, healthy, watch, driftRisk, highRisk, newFlags });
+});
+
 router.post("/attendance", (req, res) => {
   const body = SaveAttendanceBody.parse(req.body);
   // Idempotent: re-saving the same service date overwrites previous entries.

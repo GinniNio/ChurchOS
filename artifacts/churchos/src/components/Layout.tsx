@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useGetUnreadNotificationsCount } from "@workspace/api-client-react";
-import { Bell, Home, UserPlus, FileText, Wallet, Users, Mic2, Inbox } from "lucide-react";
+import { Bell, Home, UserPlus, FileText, Wallet, Users, Mic2, Inbox, Bot, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
 
@@ -11,6 +11,8 @@ const NAV = [
   { href: "/app/giving", label: "Giving", icon: Wallet },
   { href: "/app/members", label: "Members", icon: Users },
   { href: "/app/sermons", label: "Sermons", icon: Mic2 },
+  { href: "/app/agent", label: "Agent", icon: Bot },
+  { href: "/app/announcements", label: "Announcements", icon: Megaphone },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
