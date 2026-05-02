@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CHURCH, formatDate } from "@/lib/format";
+import { X, CalendarCheck } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "bg-amber-100 text-amber-800",
@@ -24,11 +25,43 @@ const STATUS_COLORS: Record<string, string> = {
   cold: "bg-slate-200 text-slate-700",
 };
 
+const MSG_TYPE_BADGE: Record<string, string> = {
+  sms: "bg-blue-100 text-blue-800",
+  "cell-leader-alert": "bg-amber-100 text-amber-800",
+  pastoral: "bg-purple-100 text-purple-800",
+  "sequence-scheduled": "bg-slate-100 text-slate-700",
+};
+
+const DAY_MAP: Record<number, number> = { 1: 0, 2: 3, 3: 7, 4: 10, 5: 14 };
+
+type SequenceStep = {
+  id: number;
+  step: number;
+  scheduledAt: string;
+  messageType: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  sentAt: string | null;
+};
+
 export default function Visitors() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const visitors = useListVisitors({ church: CHURCH });
   const summary = useGetVisitorsSummary({ church: CHURCH });
+  const [seqModal, setSeqModal] = useState<{ visitor: any; steps: SequenceStep[] } | null>(null);
+  const [seqLoading, setSeqLoading] = useState<number | null>(null);
+  const [seqStats, setSeqStats] = useState<{ active: number; sentThisWeek: number } | null>(null);
+
+  // Fetch stats on mount (non-blocking)
+  useState(() => {
+    fetch(`/api/visitors/sequences/stats?church=${encodeURIComponent(CHURCH)}`)
+      .then((r) => r.json())
+      .then(setSeqStats)
+      .catch(() => {});
+  });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: getListVisitorsQueryKey({ church: CHURCH }) });
@@ -39,29 +72,53 @@ export default function Visitors() {
   const create = useCreateVisitor({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Visitor added", description: "Welcome SMS captured to Inbox." });
+        toast({ title: "Visitor added", description: "Welcome SMS + 14-day nurture sequence started." });
         setForm({ fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true });
         invalidateAll();
+        // Refresh stats
+        fetch(`/api/visitors/sequences/stats?church=${encodeURIComponent(CHURCH)}`)
+          .then((r) => r.json()).then(setSeqStats).catch(() => {});
       },
     },
   });
+
   const updateStatus = useUpdateVisitorStatus({
     mutation: { onSuccess: () => invalidateAll() },
   });
 
   const [form, setForm] = useState({
-    fullName: "",
-    phone: "",
-    email: "",
-    howHeard: "Friend",
-    firstTime: true,
+    fullName: "", phone: "", email: "", howHeard: "Friend", firstTime: true,
   });
+
+  const openSequence = async (visitor: any) => {
+    setSeqLoading(visitor.id);
+    try {
+      const res = await fetch(`/api/visitors/sequences?visitorId=${visitor.id}`);
+      const steps: SequenceStep[] = await res.json();
+      setSeqModal({ visitor, steps });
+    } catch {
+      toast({ title: "Could not load sequence", variant: "destructive" });
+    } finally {
+      setSeqLoading(null);
+    }
+  };
 
   return (
     <Layout>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Visitor Follow-Up</h1>
-        <p className="text-slate-500 mt-1">Capture first-time guests and trigger automatic welcome messages.</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Visitor Follow-Up</h1>
+          <p className="text-slate-500 mt-1">Capture first-time guests and trigger automatic welcome messages.</p>
+        </div>
+        {seqStats && (
+          <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2">
+            <CalendarCheck className="w-4 h-4 text-amber-500" />
+            <span>
+              <strong className="text-slate-900">{seqStats.active}</strong> sequences active ·{" "}
+              <strong className="text-slate-900">{seqStats.sentThisWeek}</strong> messages sent this week
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="grid md:grid-cols-4 gap-4 mb-6">
@@ -165,7 +222,17 @@ export default function Visitors() {
                       {v.status}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openSequence(v)}
+                      disabled={seqLoading === v.id}
+                      data-testid={`button-sequence-${v.id}`}
+                      className="text-xs"
+                    >
+                      {seqLoading === v.id ? "…" : "Sequence"}
+                    </Button>
                     <select
                       className="h-8 text-xs rounded border border-slate-300 bg-white px-2"
                       value={v.status}
@@ -191,6 +258,71 @@ export default function Visitors() {
           </table>
         </div>
       </div>
+
+      {/* ── Nurture Sequence Modal ─────────────────────────────────────────── */}
+      {seqModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          onClick={(e) => e.target === e.currentTarget && setSeqModal(null)}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div>
+                <div className="font-bold text-base">14-Day Nurture Sequence</div>
+                <div className="text-sm text-amber-600">{seqModal.visitor.fullName}</div>
+              </div>
+              <button onClick={() => setSeqModal(null)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+              {seqModal.steps.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-8">
+                  No sequence steps yet.<br />
+                  <button
+                    className="text-amber-600 underline mt-2 text-xs"
+                    onClick={async () => {
+                      await fetch(`/api/visitors/${seqModal.visitor.id}/start-sequence`, { method: "POST" });
+                      openSequence(seqModal.visitor);
+                    }}
+                  >
+                    Start sequence now
+                  </button>
+                </p>
+              )}
+              {seqModal.steps.map((s) => (
+                <div
+                  key={s.id}
+                  className={`rounded-lg border p-4 ${s.status === "sent" ? "bg-green-50 border-green-200" : "bg-slate-50 border-slate-200"}`}
+                  data-testid={`seq-step-${s.step}`}
+                >
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-xs font-bold text-slate-700">Step {s.step}</span>
+                    <span className="text-xs text-slate-500">Day {DAY_MAP[s.step] ?? "?"}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${MSG_TYPE_BADGE[s.messageType] ?? "bg-slate-100 text-slate-600"}`}>
+                      {s.messageType === "cell-leader-alert" ? "Alert" : s.messageType.toUpperCase()}
+                    </span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ml-auto ${s.status === "sent" ? "bg-green-100 text-green-800" : "bg-slate-200 text-slate-600"}`}>
+                      {s.status === "sent" ? "✓ Sent" : "Pending"}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-700 mb-1">{s.subject}</div>
+                  <div className="text-xs text-slate-600 leading-relaxed line-clamp-3">{s.body}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">
+                    Scheduled: {formatDate(s.scheduledAt)}
+                    {s.sentAt && ` · Sent: ${formatDate(s.sentAt)}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-6 py-3 border-t border-slate-200 text-xs text-slate-400">
+              Steps fire automatically via the background scheduler · All messages captured to Inbox
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

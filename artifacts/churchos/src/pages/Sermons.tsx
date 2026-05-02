@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useListSermons,
   useIncrementSermonPlay,
@@ -12,7 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { CHURCH, formatDate } from "@/lib/format";
-import { Mic2, Play, Rss } from "lucide-react";
+import { Mic2, Play, Rss, Send, RotateCcw } from "lucide-react";
+
+type ChatSource = { id: number; title: string; preacher: string; sermonDate: string; scripture: string };
+type ChatState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "done"; answer: string; sources: ChatSource[] }
+  | { phase: "error"; message: string };
 
 export default function Sermons() {
   const qc = useQueryClient();
@@ -23,17 +30,15 @@ export default function Sermons() {
       onSuccess: () => qc.invalidateQueries({ queryKey: getListSermonsQueryKey({ church: CHURCH }) }),
     },
   });
+
+  // ── upload form ──────────────────────────────────────────────────────────
   const [form, setForm] = useState({
-    title: "",
-    preacher: "",
+    title: "", preacher: "",
     sermonDate: new Date().toISOString().slice(0, 10),
-    scripture: "",
-    seriesName: "",
-    description: "",
+    scripture: "", seriesName: "", description: "",
   });
   const [audio, setAudio] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const baseUrl = import.meta.env.BASE_URL;
   const apiBase = "/api";
 
   const submit = async (e: React.FormEvent) => {
@@ -62,7 +67,40 @@ export default function Sermons() {
     }
   };
 
-  void baseUrl;
+  // ── sermon chat ──────────────────────────────────────────────────────────
+  const [question, setQuestion] = useState("");
+  const [chat, setChat] = useState<ChatState>({ phase: "idle" });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const archiveRef = useRef<HTMLDivElement>(null);
+
+  const askQuestion = async () => {
+    const q = question.trim();
+    if (!q) return;
+    setChat({ phase: "loading" });
+    try {
+      const res = await fetch(`${apiBase}/ai/sermon-chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: q, churchName: CHURCH }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setChat({ phase: "done", answer: data.answer, sources: data.sources ?? [] });
+    } catch {
+      setChat({ phase: "error", message: "Something went wrong. Try again." });
+    }
+  };
+
+  const scrollToSermon = (id: number) => {
+    const el = document.querySelector(`[data-testid="sermon-${id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const resetChat = () => {
+    setChat({ phase: "idle" });
+    setQuestion("");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   return (
     <Layout>
@@ -75,14 +113,99 @@ export default function Sermons() {
           href={`${apiBase}/sermons.rss?church=${encodeURIComponent(CHURCH)}`}
           target="_blank"
           rel="noreferrer"
-          className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-2 px-3 py-2 rounded border border-amber-300 hover-elevate"
+          className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-2 px-3 py-2 rounded border border-amber-300"
           data-testid="link-rss"
         >
           <Rss className="w-4 h-4" /> Podcast RSS
         </a>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      {/* ── AI Sermon Chat ─────────────────────────────────────────────────── */}
+      <div className="mb-6 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200 p-6">
+        <div className="text-lg font-bold mb-0.5">🤖 Ask Our Sermon Library</div>
+        <p className="text-sm text-slate-600 mb-4">
+          Ask anything — our AI answers from {CHURCH}'s own sermon content.
+        </p>
+
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && askQuestion()}
+            placeholder="e.g. What has our pastor said about trusting God?"
+            className="bg-white border-amber-300 focus-visible:ring-amber-400"
+            disabled={chat.phase === "loading"}
+            data-testid="input-sermon-question"
+          />
+          <Button
+            onClick={askQuestion}
+            disabled={chat.phase === "loading" || !question.trim()}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold shrink-0"
+            data-testid="button-ask-sermon"
+          >
+            <Send className="w-4 h-4 mr-1.5" /> Ask
+          </Button>
+        </div>
+
+        {chat.phase === "loading" && (
+          <div className="mt-4 flex items-center gap-2 text-amber-700 text-sm" data-testid="chat-loading">
+            <span className="flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="w-2 h-2 bg-amber-500 rounded-full animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </span>
+            Thinking…
+          </div>
+        )}
+
+        {chat.phase === "done" && (
+          <div className="mt-4 space-y-3" data-testid="chat-answer">
+            <div className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm">
+              <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{chat.answer}</p>
+
+              {chat.sources.length > 0 && (
+                <div className="mt-3 border-t border-amber-100 pt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-2">Sources</div>
+                  <div className="flex flex-wrap gap-2">
+                    {chat.sources.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => scrollToSermon(s.id)}
+                        className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-full border border-amber-200 transition-colors"
+                        data-testid={`source-chip-${s.id}`}
+                      >
+                        {s.title} — {s.preacher} · {formatDate(s.sermonDate)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={resetChat}
+              className="text-xs text-amber-700 hover:text-amber-900 flex items-center gap-1"
+              data-testid="button-ask-another"
+            >
+              <RotateCcw className="w-3 h-3" /> Ask another question
+            </button>
+          </div>
+        )}
+
+        {chat.phase === "error" && (
+          <div className="mt-4 text-sm text-red-600 flex items-center gap-2" data-testid="chat-error">
+            {chat.message}
+            <button onClick={resetChat} className="underline text-xs">Try again</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── existing upload + cards ────────────────────────────────────────── */}
+      <div className="grid md:grid-cols-3 gap-6" ref={archiveRef}>
         <form className="bg-white rounded-lg p-6 border border-slate-200 space-y-3 self-start" onSubmit={submit}>
           <h2 className="font-bold mb-2">Upload sermon</h2>
           <div><Label>Title</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="input-title" /></div>
@@ -119,7 +242,7 @@ export default function Sermons() {
                     <audio
                       controls
                       preload="none"
-                      src={`${apiBase}/sermons/audio/${encodeURIComponent(s.audioFilename ?? "demo.mp3")}`}
+                      src={`${apiBase}/sermons/audio/${encodeURIComponent((s as any).audioFilename ?? "demo.mp3")}`}
                       onPlay={() => play.mutate({ id: s.id })}
                       className="h-9"
                       data-testid={`audio-${s.id}`}

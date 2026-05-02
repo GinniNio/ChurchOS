@@ -112,13 +112,32 @@ CREATE TABLE IF NOT EXISTS waitlist (
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS visitor_sequences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  visitorId INTEGER NOT NULL,
+  step INTEGER NOT NULL,
+  scheduledAt TEXT NOT NULL,
+  sentAt TEXT,
+  status TEXT DEFAULT 'pending',
+  messageType TEXT,
+  recipient TEXT,
+  subject TEXT,
+  body TEXT,
+  FOREIGN KEY (visitorId) REFERENCES visitors(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_visitors_church ON visitors(churchName);
 CREATE INDEX IF NOT EXISTS idx_giving_church ON giving(churchName);
 CREATE INDEX IF NOT EXISTS idx_members_church ON members(churchName);
 CREATE INDEX IF NOT EXISTS idx_sermons_church ON sermons(churchName);
 CREATE INDEX IF NOT EXISTS idx_programs_church ON programs(churchName);
 CREATE INDEX IF NOT EXISTS idx_attendance_member_date ON attendance_log(memberId, serviceDate);
+CREATE INDEX IF NOT EXISTS idx_visitor_sequences_visitor ON visitor_sequences(visitorId);
+CREATE INDEX IF NOT EXISTS idx_visitor_sequences_status ON visitor_sequences(status, scheduledAt);
 `);
+
+// Additive migrations — wrapped in try/catch so they are safe on existing DBs
+try { db.exec("ALTER TABLE sermons ADD COLUMN transcript TEXT"); } catch { /* already exists */ }
 
 export type NotifyType = "sms" | "email";
 export function notify(type: NotifyType, recipient: string, subject: string, body: string): void {

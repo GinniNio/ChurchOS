@@ -7,6 +7,7 @@ import membersRouter from "./members";
 import sermonsRouter from "./sermons";
 import notificationsRouter from "./notifications";
 import waitlistRouter from "./waitlist";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(membersRouter);
 router.use(sermonsRouter);
 router.use(notificationsRouter);
 router.use(waitlistRouter);
+router.use(aiRouter);
 
 export default router;
