@@ -3,20 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ChurchOS API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: visitors
+  - name: programs
+  - name: giving
+  - name: members
+  - name: sermons
+  - name: notifications
+  - name: waitlist
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +30,624 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ----- Visitors -----
+  /visitors:
+    get:
+      operationId: listVisitors
+      tags: [visitors]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Visitor" }
+    post:
+      operationId: createVisitor
+      tags: [visitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateVisitorBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Visitor" }
+  /visitors/{id}/status:
+    patch:
+      operationId: updateVisitorStatus
+      tags: [visitors]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Visitor" }
+  /visitors/summary:
+    get:
+      operationId: getVisitorsSummary
+      tags: [visitors]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VisitorsSummary" }
+
+  # ----- Programs / Bulletins -----
+  /programs:
+    get:
+      operationId: listPrograms
+      tags: [programs]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Program" }
+    post:
+      operationId: createProgram
+      tags: [programs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProgramBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Program" }
+  /programs/{id}:
+    get:
+      operationId: getProgram
+      tags: [programs]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Program" }
+
+  # ----- Giving -----
+  /giving:
+    get:
+      operationId: listGiving
+      tags: [giving]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Giving" }
+  /giving/initiate:
+    post:
+      operationId: initiateGiving
+      tags: [giving]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InitiateGivingBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Giving" }
+  /giving/confirm/{ref}:
+    post:
+      operationId: confirmGiving
+      tags: [giving]
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Giving" }
+  /giving/summary:
+    get:
+      operationId: getGivingSummary
+      tags: [giving]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GivingSummary" }
+
+  # ----- Members -----
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+    post:
+      operationId: createMember
+      tags: [members]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMemberBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+  /members/summary:
+    get:
+      operationId: getMembersSummary
+      tags: [members]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembersSummary" }
+  /members/seed:
+    post:
+      operationId: seedMembers
+      tags: [members]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [church]
+              properties:
+                church: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inserted: { type: integer }
+                required: [inserted]
+  /attendance:
+    post:
+      operationId: saveAttendance
+      tags: [members]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveAttendanceBody" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttendanceResult" }
+
+  # ----- Sermons -----
+  /sermons:
+    get:
+      operationId: listSermons
+      tags: [sermons]
+      parameters:
+        - name: church
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Sermon" }
+    post:
+      operationId: createSermon
+      tags: [sermons]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSermonBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sermon" }
+  /sermons/{id}:
+    get:
+      operationId: getSermon
+      tags: [sermons]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sermon" }
+  /sermons/{id}/play:
+    post:
+      operationId: incrementSermonPlay
+      tags: [sermons]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  playCount: { type: integer }
+                required: [playCount]
+
+  # ----- Notifications -----
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Notification" }
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationsCount
+      tags: [notifications]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread: { type: integer }
+                required: [unread]
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+
+  # ----- Waitlist -----
+  /waitlist:
+    post:
+      operationId: joinWaitlist
+      tags: [waitlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [churchName, adminEmail]
+              properties:
+                churchName: { type: string }
+                adminEmail: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                required: [ok]
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    Visitor:
+      type: object
+      required: [id, churchName, fullName, phone, status, firstTime, visitDate, createdAt]
+      properties:
+        id: { type: integer }
+        churchName: { type: string }
+        fullName: { type: string }
+        phone: { type: string }
+        email: { type: string, nullable: true }
+        howHeard: { type: string, nullable: true }
+        firstTime: { type: boolean }
+        visitDate: { type: string }
+        status: { type: string }
+        cellLeaderEmail: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string }
+    CreateVisitorBody:
+      type: object
+      required: [churchName, fullName, phone]
+      properties:
+        churchName: { type: string }
+        fullName: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        howHeard: { type: string }
+        firstTime: { type: boolean }
+    VisitorsSummary:
+      type: object
+      required: [total, newCount, contactedCount, returnedCount, coldCount]
+      properties:
+        total: { type: integer }
+        newCount: { type: integer }
+        contactedCount: { type: integer }
+        returnedCount: { type: integer }
+        coldCount: { type: integer }
+
+    Program:
+      type: object
+      required: [id, churchName, sermonTitle, preacher, serviceDate, generatedHtml, createdAt]
+      properties:
+        id: { type: integer }
+        churchName: { type: string }
+        sermonTitle: { type: string }
+        preacher: { type: string }
+        serviceDate: { type: string }
+        scripture1: { type: string, nullable: true }
+        scripture2: { type: string, nullable: true }
+        scripture3: { type: string, nullable: true }
+        mainPoints: { type: string, nullable: true }
+        announcements: { type: string, nullable: true }
+        offeringTheme: { type: string, nullable: true }
+        generatedHtml: { type: string }
+        createdAt: { type: string }
+    CreateProgramBody:
+      type: object
+      required: [churchName, sermonTitle, preacher, serviceDate]
+      properties:
+        churchName: { type: string }
+        sermonTitle: { type: string }
+        preacher: { type: string }
+        serviceDate: { type: string }
+        scripture1: { type: string }
+        scripture2: { type: string }
+        scripture3: { type: string }
+        mainPoints: { type: string }
+        announcements: { type: string }
+        offeringTheme: { type: string }
+
+    Giving:
+      type: object
+      required: [id, churchName, donorName, donorPhone, amount, category, status, ref, createdAt]
+      properties:
+        id: { type: integer }
+        churchName: { type: string }
+        donorName: { type: string }
+        donorPhone: { type: string }
+        amount: { type: number }
+        category: { type: string }
+        status: { type: string }
+        ref: { type: string }
+        createdAt: { type: string }
+    InitiateGivingBody:
+      type: object
+      required: [churchName, donorName, donorPhone, amount, category]
+      properties:
+        churchName: { type: string }
+        donorName: { type: string }
+        donorPhone: { type: string }
+        amount: { type: number }
+        category: { type: string }
+    GivingCategoryTotal:
+      type: object
+      required: [category, total]
+      properties:
+        category: { type: string }
+        total: { type: number }
+    GivingSummary:
+      type: object
+      required: [totalThisMonth, totalAllTime, byCategory]
+      properties:
+        totalThisMonth: { type: number }
+        totalAllTime: { type: number }
+        byCategory:
+          type: array
+          items: { $ref: "#/components/schemas/GivingCategoryTotal" }
+
+    Member:
+      type: object
+      required: [id, churchName, fullName, phone, cellGroup, consecutiveMisses, status, createdAt]
+      properties:
+        id: { type: integer }
+        churchName: { type: string }
+        fullName: { type: string }
+        phone: { type: string }
+        email: { type: string, nullable: true }
+        cellGroup: { type: string }
+        cellLeaderEmail: { type: string, nullable: true }
+        joinDate: { type: string, nullable: true }
+        lastAttendance: { type: string, nullable: true }
+        consecutiveMisses: { type: integer }
+        status: { type: string }
+        createdAt: { type: string }
+    CreateMemberBody:
+      type: object
+      required: [churchName, fullName, phone, cellGroup]
+      properties:
+        churchName: { type: string }
+        fullName: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        cellGroup: { type: string }
+        cellLeaderEmail: { type: string }
+    MembersSummary:
+      type: object
+      required: [total, active, atRisk, ghost, inactive]
+      properties:
+        total: { type: integer }
+        active: { type: integer }
+        atRisk: { type: integer }
+        ghost: { type: integer }
+        inactive: { type: integer }
+    AttendanceEntry:
+      type: object
+      required: [memberId, present]
+      properties:
+        memberId: { type: integer }
+        present: { type: boolean }
+    SaveAttendanceBody:
+      type: object
+      required: [serviceDate, entries]
+      properties:
+        serviceDate: { type: string }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/AttendanceEntry" }
+    AttendanceResult:
+      type: object
+      required: [presentCount, absentCount, alertsSent]
+      properties:
+        presentCount: { type: integer }
+        absentCount: { type: integer }
+        alertsSent: { type: integer }
+
+    Sermon:
+      type: object
+      required: [id, churchName, title, preacher, sermonDate, scripture, playCount, createdAt]
+      properties:
+        id: { type: integer }
+        churchName: { type: string }
+        title: { type: string }
+        preacher: { type: string }
+        sermonDate: { type: string }
+        scripture: { type: string }
+        seriesName: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        audioFilename: { type: string, nullable: true }
+        playCount: { type: integer }
+        createdAt: { type: string }
+    CreateSermonBody:
+      type: object
+      required: [churchName, title, preacher, sermonDate, scripture]
+      properties:
+        churchName: { type: string }
+        title: { type: string }
+        preacher: { type: string }
+        sermonDate: { type: string }
+        scripture: { type: string }
+        seriesName: { type: string }
+        description: { type: string }
+        audioFilename: { type: string }
+
+    Notification:
+      type: object
+      required: [id, type, recipient, subject, body, sentAt, read]
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        recipient: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        sentAt: { type: string }
+        read: { type: boolean }
